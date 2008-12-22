@@ -1,0 +1,45 @@
+Acme::Tools version 0.10
+=======================
+
+INSTALLATION
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+Or if you've installed 'CPAN' and have the 'cpan' tool available, run:
+
+   cpan Acme::Tools
+
+
+WHAT
+
+Acme::Tools is a collection of more or less useful subs lumped together in one module.
+
+All subs are exported, so beware of name space pollution. (What did you expect of an acme module?)
+
+To import just some subs, do:
+
+ use Acme::Tools qw(pivot ansicolor);
+
+See documentation for more.
+
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+  blah blah blah
+
+COPYRIGHT AND LICENCE
+
+Put the correct copyright and licence information here.
+
+Copyright (C) 2008 Kjetil Skotheim
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
+
