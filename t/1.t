@@ -29,7 +29,7 @@ ok(sum(3,undef)==3);
 ok(avg(2,4,9)==5);
 ok(avg(2,4,9,undef)==3.75);
 ok(0==0+grep{abs(geomavg($_,$_)-$_)>1e-8}range(3,10000,13));
-ok(geomavg(2,3,4,5));
+ok(abs(geomavg(2,3,4,5)-3.30975091964687)<1e-11);
 ok(abs(geomavg(10,100,1000,10000,100000)-1000)<1e-8);
 
 #--stddev

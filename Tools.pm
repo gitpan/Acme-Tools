@@ -1,6 +1,6 @@
 package Acme::Tools;
 
-our $VERSION = '0.10';
+our $VERSION = '0.11';
 
 use 5.008;
 use strict;
@@ -125,7 +125,7 @@ A set of more or less useful subs collected for some time...
 
 =head1 EXPORT
 
-Almost every sub. About 60 of them.
+Almost every sub, about 60 of them.
 
 Beware of name space pollution. But what did you expect from an acme module?
 
@@ -133,9 +133,10 @@ Beware of name space pollution. But what did you expect from an acme module?
 
 =head2 min
 
-Returns the smallest of a list of numbers. Undef is ignored.
+Returns the smallest in a list of numbers. Undef is ignored.
 
- $shortest = min(@lengths);
+ @lengths=(2,3,5,2,10,5);
+ $shortest = min(@lengths);   # 2
 
 =cut
 
@@ -148,9 +149,10 @@ sub min
 
 =head2 max
 
-Returns the largest of a list of numbers. Undef is ignored.
+Returns the largest in a list of numbers. Undef is ignored.
 
- $highest = max(@heights);
+ @heights=(123,90,134,132);
+ $highest = max(@heights);   # 134
 
 =cut
 
@@ -180,9 +182,7 @@ sub sum
 
 Returns the I<average> number of a list of numbers. That is C<sum / count>
 
- print avg(2, 4, 9);   # 5
-
-(2+4+9) / 3 = 5
+ print avg(2, 4, 9);   # 5              (2+4+9) / 3 = 5
 
 Also known as I<arithmetic mean>.
 
@@ -201,6 +201,11 @@ sub avg
 
 Returns the I<geometric average> (a.k.a I<geometric mean>) of a list of numbers.
 
+ print geomavg(10,100,1000,10000,100000);               # 1000
+ print 0+ (10*100*1000*10000*100000) ** (1/5);          # 1000 same thing
+ print exp(avg(map log($_),10,100,1000,10000,100000));  # 1000 same thing, this is how geomavg() works internally
+
+
 =cut
 
 sub geomavg { exp(avg(map log($_),@_)) }
@@ -211,7 +216,7 @@ C<< Standard_Deviation = sqrt(varians) >>
 
 C<< Varians = ( sum (x[i]-Avgerage)**2)/(n-1) >>
 
-Standard deviation (stddev) is a messurement of the width of a normal
+Standard deviation (stddev) is a measurement of the width of a normal
 distribution where one stddev on each side of the mean covers 68% and
 two stddevs 95%.  Normal distributions are sometimes called Gauss curves
 or Bell shapes.
@@ -259,7 +264,7 @@ sub median
 Returns one or more percentiles of a list of numbers.
 
 Percentile 50 is the same as the I<median>, percentile 25 is the first
-quartil, 75 is the third quartil.
+quartile, 75 is the third quartile.
 
 B<Input:>
 
@@ -287,7 +292,7 @@ Is the same as this:
 
  @p = percentile([25, 50, 75], @data);
 
-But the latter is faster, espessially if @data is large since it sorts
+But the latter is faster, especially if @data is large since it sorts
 the numbers only once internally.
 
 B<Example:>
@@ -296,22 +301,22 @@ Data: 1, 4, 6, 7, 8, 9, 22, 24, 39, 49, 555, 992
 
 Average (or mean) is 143
 
-Median is 15.5 (which is the average og 9 and 22 who both equally lays in the middle)
+Median is 15.5 (which is the average of 9 and 22 who both equally lays in the middle)
 
-The 25-percentile is 6.25 which is between 6 and 7, but closer to 6.
+The 25-percentile is 6.25 which are between 6 and 7, but closer to 6.
 
-The 75-percentile is 46.5, which is between 39 and 49 but close to 49.
+The 75-percentile is 46.5, which are between 39 and 49 but close to 49.
 
 Linear interpolation is used to find the 25- and 75-percentile and any
 other x-percentile which doesn't fall exactly on one of the numbers in
-det set.
+the set.
 
 B<Interpolation:>
 
-As you saw, 6.25 is closer to 6 than to 7 because 25% along the set of
+As you saw, 6.25 are closer to 6 than to 7 because 25% along the set of
 the twelve numbers is closer to the third number (6) than to he fourth
 (7). The median (50-percentile) is also really interpolated, but it is
-always in the middle of the two center numbers if there is an even count
+always in the middle of the two center numbers if there are an even count
 of numbers.
 
 However, there is two methods of interpolation:
@@ -325,11 +330,11 @@ Method 2: In Oracle databases the least and greatest numbers
 always lay on the 0- and 100-percentile.
 
 As an argument on why Oracles (and others?) definition is wrong is to
-look at your data as for instance temperature meassurements.  If you
+look at your data as for instance temperature measurements.  If you
 place the highest temperature on the 100-percentile you are sort of
 saying that there can never be a higher temperatures in future measurements.
 
-A quick nonexhaustive google survey suggests that method one is most
+A quick non-exhaustive Google survey suggests that method one is most
 commonly used.
 
 The larger the data sets, the less difference there is between the two methods.
@@ -339,10 +344,10 @@ B<Extrapolation:>
 In method one, when you want a percentile outside of any possible
 interpolation, you use the smallest and second smallest to extrapolate
 from. For instance in the data set C<5, 6, 7>, if you want an
-x-percetile of x < 25, this is below 5.
+x-percentile of x < 25, this is below 5.
 
 If you feel tempted to go below 0 or above 100, C<percentile()> will
-I<die> (or I<croak> to be more presice)
+I<die> (or I<croak> to be more precise)
 
 Another method could be to use "soft curves" instead of "straight
 lines" in interpolation. Maybe B-splines or Bezier curves. This is not
@@ -415,7 +420,7 @@ sub percentile
       $i==int($i)? $t[$i]:
                    $t[$i]*(int($i+1)-$i) + $t[$i+1]*($i-int($i));
   }
-  return @p==1 ? $ret[0]:@ret;
+  return @p==1 ? $ret[0] : @ret;
 }
 
 #=head1 SQL INSPIRED FUNCTIONS
@@ -425,14 +430,14 @@ sub percentile
 
 The no value function (or null value function)
 
-C<nvl()> takes two or more arguments. (Oracles takes just two)
+C<nvl()> takes two or more arguments. (Oracles take just two)
 
 Returns the value of the first input argument with length > 0.
 
 Return undef if no such input argument.
 
 In perl 5.10 and perl 6 this will most often be easier with the C< //
-> operator, althou C<nvl()> and C<< // >> treats empty strings C<"">
+> operator, although C<nvl()> and C<< // >> treats empty strings C<"">
 differently. Sub nvl here considers empty strings and undef the same.
 
 =cut
@@ -447,7 +452,7 @@ sub nvl
 
 =head2 replace
 
-Return the string in the first input argument, but where pairs of search-replace strings (or rather rexexes has been runned).
+Return the string in the first input argument, but where pairs of search-replace strings (or rather regexes) has been run.
 
 Works as C<replace()> in Oracle, or rather regexp_replace() in Oracle 10. Except C<replace()> here can take more than three arguments.
 
@@ -505,18 +510,15 @@ Examples:
  $a=123;
  print decode($a, 123,3, 214,4, $a);     # prints 3
 
-Explaination:
+Explanation:
 
 The first argument is tested against the second, fourth, sixth and so
-on argument, and then the thirs, fifth, seventh and so on argument is
+on argument, and then the third, fifth, seventh and so on argument is
 returned if decode() finds an equal string or number.
 
+In the above example: 123 maps to 3, 124 maps to 4 and the last argument ($a) is returned if C<decode> as the last resort if every other fails.
 
-
-Forklaring: 123 mapper til 3, 124 mapper til 4, bakerste argument er returverdien dersom decode ikke finner noe.
-
-Ettersom operator C<< => >> er (så å si) synonymt med komma (som også er en operator...),
-så kan eksempelet over omskrives så det forstås lettere, på denne måten:
+Since the operator C<< => >> is synonymous to the comma operator, the above example is probably more readable rewritten like this:
 
  my $a=123;
  print decode($a, 123=>3, 214=>4, $a);   # 3
@@ -527,7 +529,7 @@ More examples:
  print decode($a, 123=>3, 214=>7, $a);              # also 3,  note that => is synonym for C<,> (comma) in perl
  print decode($a, 122=>3, 214=>7, $a);              # prints 123
  print decode($a,  123.0 =>3, 214=>7);              # prints 3
- print decode($a, '123.0'=>3, 214=>7);              # prints nothing (undef)
+ print decode($a, '123.0'=>3, 214=>7);              # prints nothing (undef), no last argument default value here
  print decode_num($a, 121=>3, 221=>7, '123.0','b'); # prints b
 
 
@@ -535,7 +537,7 @@ Sort of:
 
  decode($string, @pairs, $defalt);
 
-The last argument is returned as a defalut if none of the keys in the keys/value-pairs matched.
+The last argument is returned as a default if none of the keys in the keys/value-pairs matched.
 
 =cut
 
@@ -577,7 +579,7 @@ sub between
 
 =head2 distinct
 
-Returns the values of the input list, sorted alfaunmerically, but only
+Returns the values of the input list, sorted alfanumerically, but only
 one of each value. This is the same as L</uniq> except uniq does not
 sort the returned list.
 
@@ -605,7 +607,7 @@ I guess in perl 5.10 or perl 6 you would use the C<< ~~ >> operator instead.
 
 =head2 in_num
 
-Just as L</in>>, but uses perl operator C<< == >> instead. For numbers.
+Just as sub L</in>, but uses perl operator C<< == >> instead. For numbers.
 
 Example:
 
@@ -717,7 +719,7 @@ sub not_intersect
 
 Input:    An array of strings (or numbers)
 
-Output:   The same array in the same order, exepts elements which exists earlier in the list.
+Output:   The same array in the same order, except elements which exists earlier in the list.
 
 Same as L</distinct>, but distinct sorts the returned list.
 
@@ -781,7 +783,7 @@ Input:
 
 First argument is a reference to a hash.
 
-The rest of the arguments is a list of keys you want copied:
+The rest of the arguments are a list of keys you want copied:
 
 Output:
 
@@ -858,7 +860,7 @@ Else: returns a random integer between the integers in argument one and two.
 
 Note: This is different from C<< int($from+rand($to-$from)) >> because that never returns C<$to>, but C<random()> will.
 
-If there is no second argument and the first i an integer, a random integer between 0 and that number is returned.
+If there is no second argument and the first is an integer, a random integer between 0 and that number is returned.
 
 B<Examples:>
 
@@ -874,8 +876,6 @@ Draw numbers from a normal deviation (bell curve) or other statistical deviation
 I.e.:
 
  print random({-deviation=>'Normal', -average=>178, -stddev=>15});
-
-...which is perhaps the height of men somewhere.
 
 Another possible TODO: weighted dices, for cheating:
 
@@ -918,7 +918,7 @@ B<Input:>
 =over 4
 
 =item 1.
-Either a referance to an array as the only input. This array will the be mixed I<inplace>. The array will be changed:
+Either a reference to an array as the only input. This array will then be mixed I<in-place>. The array will be changed:
 
 This: C<< @a=mix(@a) >> is the same as:  C<< mix(\@a) >>.
 
@@ -989,8 +989,8 @@ such. (You will also use the same dictionary string when decompressing
 using L</unzipb64>.
 
 The returned string is base64 encoded. That is, the output is 33%
-larger than it has to be.  The advandage is that this string more
-easily can be stored in a database (without the hassels of CLOB/BLOB)
+larger than it has to be.  The advantage is that this string more
+easily can be stored in a database (without the hassles of CLOB/BLOB)
 or perhaps easier transfer in http POST requests (it still needs some
 url-encoding, normally). See L</zipbin> and L</unzipbin> for the
 same without base 64 encoding.
@@ -1018,7 +1018,7 @@ Example 2, same compression, now with dictionary:
   print "Hurra\n" if $output eq $txt;               # prints Hurra if everything went well
 
 
-Eksempel 3, dictionary = string to be compressed: (just for curiosity)
+Example 3, dictionary = string to be compressed: (out of curiosity)
 
   $txt = "Test av komprimering, hva skjer? " x 10;  # Same original string as above
   $zip3 = zipb64($txt,$txt);                           # hmm
@@ -1057,7 +1057,7 @@ sub zipbin
 
 =head2 unzipb64
 
-Oposite of L</zipb64>.
+Opposite of L</zipb64>.
 
 Input: 
 
@@ -1080,7 +1080,7 @@ sub unzipb64
 
 =head2 unzipbin
 
-C<unzipbin()> does the same as L</unzip> exept that C<unzipbin()>
+C<unzipbin()> does the same as L</unzip> except that C<unzipbin()>
 wants a pure binary compressed string as input, not base64.
 
 See L</unzipb64> for documentation.
@@ -1147,7 +1147,7 @@ See L</gzip> and L</gunzip>.
 
 C<bzip2()> and C<bunzip2()> works just as  C<gzip()> and C<gunzip()>,
 but use another compression algorithm. This is usually better but slower
-than the C<gzip>-algorithm. Espessialle in the compression, decompression speed is less different.
+than the C<gzip>-algorithm. Especially in the compression, decompression speed is less different.
 
 See also C<man bzip2>, C<man bunzip2> and L<Compress::Bzip2>
 
@@ -1187,7 +1187,7 @@ sub bunzip2
 
 B<Input:> an IP-number
 
-B<Output:> either an IP-adress I<machine.sld.tld> or an empty string
+B<Output:> either an IP-address I<machine.sld.tld> or an empty string
 if the DNS lookup didn't find anything.
 
 Example:
@@ -1201,7 +1201,7 @@ C<%Acme::Tools::IPADDR_memo> hash) so only the first loopup on a
 particular IP number might take some time.
 
 Some few DNS loopups can take several seconds.
-Most is done in a fraction of a second. Due to this slowness, medium to high trafic web servers should
+Most is done in a fraction of a second. Due to this slowness, medium to high traffic web servers should
 probably turn off hostname lookups in their logs and just log IP numbers.
 That is  C<HostnameLookups Off> in Apache C<httpd.conf>.
 
@@ -1224,9 +1224,9 @@ sub ipaddr
 
 =head2 ipnum
 
-C<ipnum()> does the oposite of C<ipaddr()>
+C<ipnum()> does the opposite of C<ipaddr()>
 
-Does an atempt of converting an IP adress (hostname) to an IP number.
+Does an attempt of converting an IP address (hostname) to an IP number.
 Uses DNS name servers by using perls internal C<gethostbyname()>.
 Return an empty string (undef) if unsuccessful.
 
@@ -1248,15 +1248,15 @@ sub ipnum
 
 =head2 webparams
 
-Input: (optional)
+B<Input:> (optional)
 
-Zero or one input argument: A string of the same type often found behind the first C<?> char in URLs.
+Zero or one input argument: A string of the same type often found behind the first question char (C<< ? >>) in URLs.
 
 This string can have two or more parts separated with C<&> chars.
 
 And each part consists of C<key=value> pairs (with the first C<=> char being the separation char).
 
-Both C<key> and C<value> can be urlencoded.
+Both C<key> and C<value> can be url-encoded.
 
 If there is no input argument, C<webparams> uses C<< $ENV{QUERY_STRING} >> instead.
 
@@ -1266,15 +1266,15 @@ In that case C<< $ENV{CONTENT_LENGTH} >> is taken as the number of bytes to be r
 and those bytes are use as the missing input argument.
 
 The environment variables QUERY_STRING, REQUEST_METHOD and CONTENT_LENGTH is
-tyipcally set by a webserver following the CGI standard (which apache and
+typically set by a web server following the CGI standard (which apache and
 most of them can do I guess) or in mod_perl by Apache. Although you are
-probably better off using L<CGI>. Or C<< $R->args() >> or C<< $R->content() >> i mod_perl.
+probably better off using L<CGI>. Or C<< $R->args() >> or C<< $R->content() >> in mod_perl.
 
-Output:
+B<Output:>
 
-C<webparams()> returns a hash of the key/value pairs in the input argument. Urldecoded.
+C<webparams()> returns a hash of the key/value pairs in the input argument. Url-decoded.
 
-If an input string contains more than one occurence of the same key, that keys value in the returned hash will become concatenated each value separated by a C<,> char. (A comma char)
+If an input string contains more than one occurrence of the same key, that keys value in the returned hash will become concatenated each value separated by a C<,> char. (A comma char)
 
 Examples:
 
@@ -1315,7 +1315,7 @@ Input: a string
 
 Output: the same string URL encoded so it can be sent in URLs or POST requests.
 
-In URLs (web adresses) certain characters are illegal. For instance I<space> and I<newline>.
+In URLs (web addresses) certain characters are illegal. For instance I<space> and I<newline>.
 And certain other chars have special meaning, such as C<+>, C<%>, C<=>, C<?>, C<&>.
 
 These illegal and special chars needs to be encoded to be sent in
@@ -1343,7 +1343,7 @@ sub urlenc
 
 =head2 urldec
 
-Oposite of L</urlenc>.
+Opposite of L</urlenc>.
 
 Example, this returns 'C< ø>'. That is space and C<< ø >>.
 
@@ -1374,13 +1374,13 @@ Input: One or two arguments.
 First argument: the html where a C<< <table> >> is to be found and converted.
 
 Second argument: (optional) If the html contains more than one C<<
-<table> >>, and you dont want the first one, applying a second
+<table> >>, and you do not want the first one, applying a second
 argument is a way of telling C<ht2t> which to capture: the one with this word
-or string occuring before it.
+or string occurring before it.
 
 Output: An array of arrayrefs.
 
-C<ht2t()> is a quick and dirty way of scraping (or harvesting as its
+C<ht2t()> is a quick and dirty way of scraping (or harvesting as it is
 also called) data from a web page. Look too L<HTML::Parse> to do this
 more accurate.
 
@@ -1430,7 +1430,7 @@ Does chmod + utime + chown on one or more filer.
 
 Returns the number of files of which those operations was successful.
 
-Mode, uid, gid, atime and mtime is set from the array ref in the first argument.
+Mode, uid, gid, atime and mtime are set from the array ref in the first argument.
 
 The first argument references an array which is exactly like an array returned from perls internal C<stat($filename)> -function.
 
@@ -1529,7 +1529,7 @@ B<Input:> One argument. A string where the char C<¤> have special
 meaning and is replaced by color codings depending on the letter
 following the C<¤>.
 
-B<Output:> The same string, but with C<¤letter> replaces by ansi color codes respected by many types terminal windows. (xterm, telnet, ssh,
+B<Output:> The same string, but with C<¤letter> replaces by ANSI color codes respected by many types terminal windows. (xterm, telnet, ssh,
 telnet, rlog, vt100, xterm, cygwin and such...).
 
 B<Codes for ansicolor():>
@@ -1548,7 +1548,7 @@ B<Example:>
 
  print ansicolor("This is maybe ¤ggreen¤¤?");
 
-Prints I<This is maybe green?> where the word I<green> is colored greend.
+Prints I<This is maybe green?> where the word I<green> is shown in green.
 
 If L<Term::ANSIColor> is not installed or not found, returns the input
 string with every C<¤> including the following code letters
@@ -1571,13 +1571,13 @@ sub ansicolor
 
 =head2 ccn_ok
 
-Checks if a Credit Card number (ccn) has correct control digits according to the LUHN-algorithm from 1960.
+Checks if a Credit Card number (CCN) has correct control digits according to the LUHN-algorithm from 1960.
 This method of control digits is used by MasterCard, Visa, American Express,
 Discover, Diners Club / Carte Blanche, JCB and others.
 
 B<Input:>
 
-A credit card number. Kan contain non-digits, but they are removed internally before checking.
+A credit card number. Can contain non-digits, but they are removed internally before checking.
 
 B<Output:>
 
@@ -1589,9 +1589,9 @@ Returns C<undef> (false) if the input argument is missing digits.
 
 Returns 0 (zero, which is false) is the digits is not correct according to the LUHN algorithm.
 
-Returns 1 or the name of a credit card company (true either way) if the last digit is an ok controll digit for this ccn.
+Returns 1 or the name of a credit card company (true either way) if the last digit is an ok control digit for this ccn.
 
-The name of the credit card company is returned like this (without C<'> thou)
+The name of the credit card company is returned like this (without the C<'> character)
 
  Returns (wo '')                Starts on                Number of digits
  ------------------------------ ------------------------ ----------------
@@ -1607,14 +1607,14 @@ And should perhaps have had:
 
  'enRoute'                      2014 eller 2149          15
 
-...but those card uses either another control algorithm or no control
+...but that card uses either another control algorithm or no control
 digits at all. So C<enRoute> is never returned here.
 
-If the control digis is valid, but the input does not match anything in the column C<starts on>, 1 is returned.
+If the control digits is valid, but the input does not match anything in the column C<starts on>, 1 is returned.
 
-(This is also the same control digit mechanism used in norwegian KID numbers on payment bills)
+(This is also the same control digit mechanism used in Norwegian KID numbers on payment bills)
 
-The first digit in an credit card number is supposed to tell what "industry" the card is meant for:
+The first digit in a credit card number is supposed to tell what "industry" the card is meant for:
 
  MII Digit Value             Issuer Category
  --------------------------- ----------------------------------------------------
@@ -1631,7 +1631,10 @@ The first digit in an credit card number is supposed to tell what "industry" the
 
 ...although this has no meaning to C<Acme::Tools::ccn_ok()>.
 
-The first six digits is I<Issuer Identifier>, that is the bank (probably). The rest in the "account number", exept the last digist, which is the control digit. Max length on credit card numbers are 19 digits.
+The first six digits is I<Issuer Identifier>, that is the bank
+(probably). The rest in the "account number", except the last digits,
+which is the control digit. Max length on credit card numbers are 19
+digits.
 
 =cut
 
@@ -1654,14 +1657,14 @@ sub ccn_ok
 
 =head2 KID_ok
 
-Checks if a norwegian KID number has an ok controll digit.
+Checks if a norwegian KID number has an ok control digit.
 
 To check if a customer has typed the number correctly.
 
 This uses the  LUHN algorithm (also known as mod-10) from 1960 which is also used
-internationally in controll digits for credit card numbers, and canadian social security ID numbers as well.
+internationally in control digits for credit card numbers, and Canadian social security ID numbers as well.
 
-The algorithm, as described in Phrack (47-8) ( a hacked publication):
+The algorithm, as described in Phrack (47-8) (a long time hacker online publication):
 
  "For a card with an even number of digits, double every odd numbered
  digit and subtract 9 if the product is greater than 9. Add up all the
@@ -1676,7 +1679,7 @@ B<Output:>
 
 - Returns undef if the input argument is missing.
 
-- Returns 0 if the controll digit (the last digit) does not satify the LUHN/mod-10 algorithm.
+- Returns 0 if the control digit (the last digit) does not satify the LUHN/mod-10 algorithm.
 
 - Returns 1 if ok
 
@@ -1695,8 +1698,9 @@ sub KID_ok
 
 =head2 writefile
 
-Its a bit strang that perl demands three or four operations just to write some string to a file. Maybe like this:
+Justification:
 
+Perl needs three or four operations to make a file out of a string:
 
  open my $FILE, '>', $filename  or die $!;
  print $FILE $text;
@@ -2026,7 +2030,7 @@ The examples prints:
 
 If you just want to say calculate something on each permutation,
 but is not interested in the list of them, you just don't
-take the return. Tha is:
+take the return. That is:
 
  my $ant;
  permutations(sub{$ant++ if $_[-1]>=$_[0]*2},1..9);
@@ -2041,7 +2045,7 @@ take the return. Tha is:
 C<permutations()> was created to find all combinations of a persons
 name. This is useful in "fuzzy" name searches with
 L<String::Similarity> if you can not be certain what is first, middle
-and last names. In foreign or unfamiliar names it can be difficoult to
+and last names. In foreign or unfamiliar names it can be difficult to
 know that.
 
 =cut
@@ -2124,19 +2128,21 @@ And this prints:
  Kjet, jeti, etil, til , il S, l Sk,  Sko, Skot, koth, othe, thei, heim
 
 C<trigram()> was created for "fuzzy" name searching. If you have a database of many names,
-adresses, phone numbers, customer numbers etc. You can use trigram() to search
+addresses, phone numbers, customer numbers etc. You can use trigram() to search
 among all of those at the same time. If the search form only has one input field.
 One general search box.
 
-Store all of the trigrams of the trigram-indexed input fields copled
+Store all of the trigrams of the trigram-indexed input fields coupled
 with each person, and when you search, you take each trigram of you
 query string and adds the list of people that has that trigram. The
 search result should then be sorted so that the persons with most hits
-is listed first. Both the query strings and the indexed database
-fields should have a space added first and last before trigram()-ing
+are listed first. Both the query strings and the indexed database
+fields should have a space added first and last before C<trigram()>-ing
 them.
 
-(This search algoritm is not includes here yet...)
+This search algorithm is not includes here yet...
+
+C<trigram()> should perhaps have been named ngram for obvious reasons.
 
 =cut
 
@@ -2178,7 +2184,7 @@ minus the ones that did not fulfill the condition(s).
 This of is as joins with one or more where conditions as coderefs.
 
 The coderef input arguments can be placed last or among the array refs
-to save both runtime and memory if the conditions does depend on
+to save both runtime and memory if the conditions depend on
 arrays further back.
 
 B<Examples, this:>
@@ -2198,7 +2204,7 @@ Give the same output as this:
    }
  }
 
-B<And this:> (with a condition: the sum of the first two should be divideable with 3)
+B<And this:> (with a condition: the sum of the first two should be dividable with 3)
 
  for( cart( \@a1, \@a2, sub{sum(@$_)%3==0}, \@a3 ) ) {
    my($a1,$a2,$a3)=@$_;
@@ -2312,7 +2318,7 @@ See L</code2num>
 
 =head2 code2num
 
-C<num2code()> converts numbers (integers) from the normal decimal system to some arbrutary other number system.
+C<num2code()> convert numbers (integers) from the normal decimal system to some arbitrary other number system.
 That can be binary (2), oct (8), hex (16) or others.
 
 Example:
@@ -2320,8 +2326,8 @@ Example:
  print num2code(255,2,"0123456789ABCDEF");  # prints FF
  print num2code(14,2,"0123456789ABCDEF");   # prints 0E
 
-...because 255 is converted to hex (0-F) with a return of 2 digits: FF
-...and 14 is converted to 0E, with leading 0 because of the second argument 2.
+...because 255 are converted to hex (0-F) with a return of 2 digits: FF
+...and 14 are converted to 0E, with leading 0 because of the second argument 2.
 
 Example:
 
@@ -2435,13 +2441,13 @@ Resembles the pivot table function in Excel.
 
 C<pivot()> is used to spread out a slim and long table to a visually improved layout.
 
-For instanse spreading out the results of C<group by>-selects from SQL:
+For instance spreading out the results of C<group by>-selects from SQL:
 
  pivot( arrayref, columnname1, columnname2, ...)
 
  pivot( ref_to_array_of_arrayrefs, @list_of_names_to_down_fields )
 
-The first argument is a ref to a two dimentional table.
+The first argument is a ref to a two dimensional table.
 
 The rest of the arguments is a list which also signals the number of
 columns from left in each row that is ending up to the left of the
@@ -2658,7 +2664,7 @@ sub _sortsub {
 
 =head2 tablestring
 
-B<Input:> en referanse to an array of arrayrefs (a two dimentional table of values)
+B<Input:> a reference to an array of arrayrefs (a two dimensional table of values)
 
 B<Output:> a string containing the table (a string of two or normally more lines)
 
@@ -2667,7 +2673,7 @@ or ... (...more later...)
 
 In this output table:
 
-- the columns are not broader than nescessary
+- the columns are not broader than necessary
 
 - multi lined cell values are handled also
 
@@ -2693,7 +2699,7 @@ Prints this multi lined string:
  
  10  22 adf
 
-Rows containing multi lined cells gets a empty line before and after the row, to separate more clearly.
+Rows containing multi lined cells gets an empty line before and after the row, to separate it more clearly.
 
 =cut
 
@@ -2861,7 +2867,7 @@ CPAN, before CPAN even...)
 
 B<Input:> One to four arguments.
 
-First argument: A referance to the structure you want.
+First argument: A reference to the structure you want.
 
 Second argument: (optional) The name the structure will get in the output string.
 If second argument is missing or is undef or '', it will get no name in the output.
@@ -2872,16 +2878,18 @@ C<< > >> char in from of the filename will append that file
 instead. Use C<''> or C<undef> to not write to a file if you want to
 use a fourth argument.
 
-Fourth argument: (optional) A number signaling the depth on which newlines is used in the output.
+Fourth argument: (optional) A number signalling the depth on which newlines is used in the output.
 The default is infinite (some big number) so no extra newlines are output.
 
 B<Output:> A string containing the perl-code definition that makes that data structure.
 The input reference (first input argument) can be to an array, hash or a string.
-Those can containt others refs and strings in a deep data structure.
+Those can contain other refs and strings in a deep data structure.
 
-Code refs are not handled (just returns C<sub{die()}>).
+Limitations:
 
-Regex, class refs and circular recursive structures are also not handled.
+- Code refs are not handled (just returns C<sub{die()}>)
+
+- Regex, class refs and circular recursive structures are also not handled.
 
 B<Examples:>
 
@@ -3042,7 +3050,7 @@ sub serialize
 
 # =head2 convert
 # 
-# Converts between units of meassurements.
+# Converts between units of measurements.
 # 
 # Examples:
 # 
@@ -3314,7 +3322,7 @@ sub serialize
 
 Input: A year, four digits
 
-Output: two numbers: month and date of easter sunday that year. Month is 3 i march or 4 if april.
+Output: two numbers: month and date of Easter Sunday that year. Month 3 means March and 4 means April.
 
  sub easter { use integer;my$Y=shift;my$C=$Y/100;my$L=($C-$C/4-($C-($C-17)/25)/3+$Y%19*19+15)%30;
              (($L-=$L>28||($L>27?1-(21-$Y%19)/11:0))-=($Y+$Y/4+$L+2-$C+$C/4)%7)<4?($L+28,3):($L-3,4) }
@@ -3322,7 +3330,7 @@ Output: two numbers: month and date of easter sunday that year. Month is 3 i mar
 ...is a "golfed" version of Oudins algorithm (1940) L<http://astro.nmsu.edu/~lhuber/leaphist.html>
 (see also http://www.smart.net/~mmontes/ec-cal.html )
 
-Valid for any Gregorian year. Dates repeats themselves after
+Valid for any Gregorian year. Dates repeat themselves after
 70499183 lunations = 2081882250 days = ca 5699845 year ...but within that time frame
 earth will have different rotation time around the sun and spin time around itself.
 
@@ -3346,7 +3354,7 @@ Could write:
  1116776232.38632
  1116776232
 
-...if thats the time now.
+...if that is the time now.
 
 C<time_fp()> C<requires>  L<Time::HiRes> and if that module is not installed or not available, it returns the result of C<time()>.
 
@@ -3361,8 +3369,12 @@ sub time_fp    # {return 0+gettimeofday} is just as well?
 
 =head2 sleep_fp
 
-sleep_fp() virker som den innebygde C<< sleep() >>, men kan ta imot sekunder med desimaler.
-F.eks. vil C<< sleep_fp(0.02) >> få programmet til å ta en pust i bakken i tjue millisekunder.
+sleep_fp() works just as the built in C<< sleep() >>, but accepts fractional seconds. Example:
+
+ sleep_fp(0.02);  # sleeps for 20 milliseconds
+
+Sub sleep_fp requires L<Time::HiRes> internally, thus it might take
+some extra time first time called. To avoid that, use C<< use Time::HiRes >> in your code.
 
 =cut
 
@@ -3370,6 +3382,13 @@ sub sleep_fp{ eval{require Time::HiRes} or (sleep(shift()),return);Time::HiRes::
 
 1;
 __END__
+
+=head1 HISTORY
+
+Release history
+
+ 0.11   Dec 2008     Improved doc
+ 0.10   Dec 2008
 
 =head1 SEE ALSO
 

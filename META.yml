@@ -1,13 +1,13 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Acme-Tools
-version:      0.10
+version:      0.11
 version_from: Tools.pm
 installdirs:  site
 requires:
     Carp:                          0.01
     Compress::Zlib:                0.01
-    Mime::Base64:                  0.01
+    MIME::Base64:                  0.01
     Time::HiRes:                   0.01
 
 distribution_type: module
