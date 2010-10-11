@@ -3,5 +3,7 @@ Makefile.PL
 MANIFEST
 README
 Tools.pm
-t/1.t
+t/1_check_use.t
+t/2_general.t
+t/3_bloomfilter.t
 META.yml                                 Module meta-data (added by MakeMaker)

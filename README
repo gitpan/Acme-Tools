@@ -1,4 +1,4 @@
-Acme::Tools version 0.10
+Acme::Tools version 0.12
 =======================
 
 INSTALLATION
@@ -30,9 +30,12 @@ See documentation for more.
 
 DEPENDENCIES
 
-This module requires these other modules and libraries:
+This module in itself does not require these modules to be used, but
+some av Acme::Tools's subs  require  them:
 
-  blah blah blah
+ require Compress::Zlib;
+ require Digest::MD5
+
 
 COPYRIGHT AND LICENCE
 

@@ -1,6 +1,8 @@
 package Acme::Tools;
 
-our $VERSION = '0.11';
+#http://en.wikipedia.org/wiki/Birthday_problem#Approximations
+
+our $VERSION = '0.12';
 
 use 5.008;
 use strict;
@@ -10,8 +12,7 @@ use Carp;
 require Exporter;
 
 our @ISA = qw(Exporter);
-our %EXPORT_TAGS = ( 'all' => [ qw(
-) ] );
+our %EXPORT_TAGS = ( 'all' => [ qw() ] );
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
  min
@@ -23,6 +24,7 @@ our @EXPORT = qw(
  median
  percentile
  random
+ random_gauss
  nvl
  replace
  decode
@@ -82,6 +84,19 @@ our @EXPORT = qw(
  easter
  time_fp
  sleep_fp
+ bytes_readable
+ bfinit
+ bfsum
+ bfaddbf
+ bfadd
+ bfcheck
+ bfgrep
+ bfgrepnot
+ bfdelete
+ bfstore
+ bfretrieve
+ bfclone
+ bfdimentions
 );
 
 =head1 NAME
@@ -221,6 +236,10 @@ distribution where one stddev on each side of the mean covers 68% and
 two stddevs 95%.  Normal distributions are sometimes called Gauss curves
 or Bell shapes.
 
+ stddev(4,5,6,5,6,4,3,5,5,6,7,6,5,7,5,6,4)             # 1.0914103126635
+ avg(@IQtestscores) + stddev(@IQtestscores)            # the score for IQ = 115 (by one definition)
+ avg(@IQtestscores) - stddev(@IQtestscores)            # the score for IQ = 85
+
 =cut
 
 sub stddev
@@ -268,14 +287,13 @@ quartile, 75 is the third quartile.
 
 B<Input:>
 
-First argument states the wanted percentile, or a list of percentiles you want from the dataset.
+First argument is your wanted percentile, or a refrence to a list of percentiles you want from the dataset.
 
 If the first argument to percentile() is a scalar, this percentile is returned.
 
 If the first argument is a reference to an array, then all those percentiles are returned as an array.
 
-Second, third, fourth and so on argument to percentile() are the data
-of which you want to find the percentile(s).
+Second, third, fourth and so on argument are the numbers from which you want to find the percentile(s).
 
 B<Examples:>
 
@@ -329,13 +347,12 @@ Method 1: The most common is to say that 5 and 7 lays on the 25- and
 Method 2: In Oracle databases the least and greatest numbers
 always lay on the 0- and 100-percentile.
 
-As an argument on why Oracles (and others?) definition is wrong is to
+As an argument on why Oracles (and others?) definition is not the best way is to
 look at your data as for instance temperature measurements.  If you
 place the highest temperature on the 100-percentile you are sort of
 saying that there can never be a higher temperatures in future measurements.
 
-A quick non-exhaustive Google survey suggests that method one is most
-commonly used.
+A quick non-exhaustive Google survey suggests that method 1 here is most used.
 
 The larger the data sets, the less difference there is between the two methods.
 
@@ -377,7 +394,7 @@ Found like this:
 
  perl -MAcme::Tools -le 'print for percentile([0,1,25,50,75,99,100], 1,4,6,7,8,9,22,24,39,49,555,992)'
 
-And like this in Oracle:
+And like this in Oracle-databases:
 
  create table tmp (n number);
  insert into tmp values (1); insert into tmp values (4); insert into tmp values (6);
@@ -394,9 +411,9 @@ And like this in Oracle:
    percentile_cont(1.00) within group(order by n) per100
  from tmp;
 
-Oracle also provides a similar function: percentile_disc where I<disc>
+(Oracle also provides a similar function: C<percentile_disc> where I<disc>
 is short for I<discrete>, meaning no interpolation is taking
-place. Instead the closest number from the data set is picked.
+place. Instead the closest number from the data set is picked.)
 
 =cut
 
@@ -428,13 +445,13 @@ sub percentile
 
 =head2 nvl
 
-The no value function (or null value function)
+The I<no value> function (or I<null value> function)
 
 C<nvl()> takes two or more arguments. (Oracles take just two)
 
-Returns the value of the first input argument with length > 0.
+Returns the value of the first input argument with length() > 0.
 
-Return undef if no such input argument.
+Return I<undef> if there is no such input argument.
 
 In perl 5.10 and perl 6 this will most often be easier with the C< //
 > operator, although C<nvl()> and C<< // >> treats empty strings C<"">
@@ -454,7 +471,7 @@ sub nvl
 
 Return the string in the first input argument, but where pairs of search-replace strings (or rather regexes) has been run.
 
-Works as C<replace()> in Oracle, or rather regexp_replace() in Oracle 10. Except C<replace()> here can take more than three arguments.
+Works as C<replace()> in Oracle, or rather regexp_replace() in Oracle 10. Except that this C<replace()> accepts more than three arguments.
 
 Examples:
 
@@ -468,7 +485,10 @@ Examples:
                                        # to change should be the last letters. This reveals that
                                        # second, fourth, sixth and so on argument is really regexs,
                                        # not normal strings. So use \ (or \\ inside "") to protect
-                                       # special characters of regexes.
+                                       # the special characters of regexes. You probably also
+                                       # should write qr/regexp/ instead of 'regexp' if you make
+                                       # use of regexps here, just to make it more clear that
+                                       # these are really regexps, not strings.
 
  print replace('JACK and JUE','J','BL'); # prints BLACK and BLUE
  print replace('JACK and JUE','J');      # prints ACK and UE
@@ -510,8 +530,6 @@ Examples:
  $a=123;
  print decode($a, 123,3, 214,4, $a);     # prints 3
 
-Explanation:
-
 The first argument is tested against the second, fourth, sixth and so
 on argument, and then the third, fifth, seventh and so on argument is
 returned if decode() finds an equal string or number.
@@ -526,18 +544,21 @@ Since the operator C<< => >> is synonymous to the comma operator, the above exam
 More examples:
 
  my $a=123;
- print decode($a, 123=>3, 214=>7, $a);              # also 3,  note that => is synonym for C<,> (comma) in perl
+ print decode($a, 123=>3, 214=>7, $a);              # also 3,  note that => is synonym for , (comma) in perl
  print decode($a, 122=>3, 214=>7, $a);              # prints 123
  print decode($a,  123.0 =>3, 214=>7);              # prints 3
  print decode($a, '123.0'=>3, 214=>7);              # prints nothing (undef), no last argument default value here
  print decode_num($a, 121=>3, 221=>7, '123.0','b'); # prints b
 
-
 Sort of:
 
- decode($string, @pairs, $defalt);
+ decode($string, %conversion, $default);
 
 The last argument is returned as a default if none of the keys in the keys/value-pairs matched.
+
+A more perl-ish and probaby faster way of doing the same:
+
+ {123=>3, 214=>7}->{$a} || $a                       # (beware of 0)
 
 =cut
 
@@ -603,16 +624,16 @@ Otherwise it returns I<0> (false).
  print in( 'a',  'A','B','C','aa');  # 0
  print in( 'a',  'A','B','C','a');   # 1
 
-I guess in perl 5.10 or perl 6 you would use the C<< ~~ >> operator instead.
+I guess in perl 5.10 or perl 6 you could use the C<< ~~ >> operator instead.
 
 =head2 in_num
 
-Just as sub L</in>, but uses perl operator C<< == >> instead. For numbers.
+Just as sub L</in>, but for numbers. Internally uses the perl operator C<< == >> instead of C< eq >.
 
-Example:
-
- print in(5000,  '5e3',);     # 0
- print in_num(5000, '5e3');   # 1
+ print in(5000,  '5e3');          # 0
+ print in(5000,   5e3);           # 1 since 5e3 is converted to 5000 before the call
+ print in_num(5000, 5e3);         # 1
+ print in_num(5000, '+5.0e03');   # 1
 
 =cut
 
@@ -640,7 +661,7 @@ Output: An array containing all elements from both input lists, but no element m
 
 Example, prints 1,2,3,4:
 
- perl -MAcme::Tools -le 'print join ",", union([1,2,3],[2,3,3,4,4])'
+ perl -MAcme::Tools -le 'print join ",", union([1,2,3],[2,3,3,4,4])'              # 1,2,3,4
 
 =cut
 
@@ -658,7 +679,7 @@ Output: An array containing all elements in the first input array but not in the
 
 Example:
 
- perl -MAcme::Tools -le ' print join " ", minus( ["five", "FIVE", 1, 2, 3.0, 4], [4, 3, "FIVE"] )'
+ perl -MAcme::Tools -le 'print join " ", minus( ["five", "FIVE", 1, 2, 3.0, 4], [4, 3, "FIVE"] )'
 
 Output is C<< five 1 2 >>.
 
@@ -679,9 +700,9 @@ Output: An array containing all elements which exists in both input arrays.
 
 Example:
 
- perl -MAcme::Tools -le ' print join" ", intersect( ["five", 1, 2, 3.0, 4], [4, 2+1, "five"] )'
+ perl -MAcme::Tools -le 'print join" ", intersect( ["five", 1, 2, 3.0, 4], [4, 2+1, "five"] )'      # 4 3 five
 
-The output being C<< 4 3 five >>.
+Output: C<< 4 3 five >>
 
 =cut
 
@@ -721,12 +742,12 @@ Input:    An array of strings (or numbers)
 
 Output:   The same array in the same order, except elements which exists earlier in the list.
 
-Same as L</distinct>, but distinct sorts the returned list.
+Same as L</distinct> but distinct sorts the returned list, I<uniq> does not.
 
 Example:
 
  my @t=(7,2,3,3,4,2,1,4,5,3,"x","xx","x",02,"07");
- print join " ", uniq @t;  # skriver  7 2 3 4 1 5 x xx 07
+ print join " ", uniq @t;                          # prints  7 2 3 4 1 5 x xx 07
 
 =cut
 
@@ -744,20 +765,18 @@ That is: two arrays containing numbers, strings or anything really.
 
 B<Output:> An array of the two arrays zipped (interlocked, merged) into each other.
 
-Example:
+ print join " ", zip( [1,3,5], [2,4,6] );               # 1 2 3 4 5 6
 
- print join " ", zip( [1,3,5], [2,4,6] );
+zip() can create hashes where the keys are found in the first array and values in the secord in correct order:
 
-Prints C<< 1 2 3 4 5 6 >>
+ my @media = qw/CD DVD VHS LP Blueray/;
+ my @count = qw/20 12 2 4 3/;
+ my %count = zip(\@media,\@count);                 # or zip( [@media], [@count] )
+ print "I got $count{DVD} DVDs\n";                 # I got 12 DVDs
 
-zip() is sometimes be useful in creating hashes where keys are found in the first array and values in the secord, in the same order:
+Dies (croaks) if the two lists are of different sizes.
 
- my @media = qw/CD DVD VHS LP/;
- my @count = qw/20 4 2 7/;
- my %count = zip(\@media,\@count);
- print "I got $count{DVD} DVDs\n"; # I got 4 DVDs
-
-TODO: Merging any number of arrayref in input.
+(TODO: Merge any number of arrayrefs, not just two)
 
 =cut
 
@@ -779,30 +798,24 @@ sub zip  #?(\@\@)
 
 Copies a subset of keys/values from one hash to another.
 
-Input:
+B<Input:> First argument is a reference to a hash. The rest of the arguments are a list of the keys of which key/value-pair you want to be copied.
 
-First argument is a reference to a hash.
-
-The rest of the arguments are a list of keys you want copied:
-
-Output:
-
-The hash consisting of the keys and values you specified.
+B<Output:> The hash consisting of the keys and values you specified.
 
 Example:
 
- %population = ( Norway=>4800000, Sweeden=>8900000, Finland=>5000000,
-                 Denmark=>5100000, Iceland=>260000, India => 1e9 );
+ %population = ( Norway=>4800000, Sweden=>8900000, Finland=>5000000,
+                 Denmark=>5100000, Iceland=>260000,
+                 India => 1e9, China=>1.3e9, USA=>300e6, UK=>60e6 );
 
- %scandinavia = subhash(\%population,qw/Norway Sweeden Denmark/);    # this
+ %scandinavia = subhash( \%population , 'Norway', 'Sweden', 'Denmark' ); # this
+ %scandinavia = (Norway=>4500000,Sweden=>8900000,Denmark=>5100000);      # and this is the same
 
- print "$_ har population $skandinavia{$_}" for keys %skandinavia;
-
- %skandinavia = (Norge=>4500000,Sverige=>8900000,Danmark=>5100000);  # is the same as this
+ print "Population of $_ is $scandinavia{$_}\n" for keys %scandinavia;
 
 ...prints the populations of the three scandinavian countries.
 
-Note: The values are NOT deep copied when they are references.
+Note: The values are NOT deep copied when they are references. (Use C<< Storable::dclone() >> to do that).
 
 =cut
 
@@ -818,7 +831,7 @@ sub subhash
 
 B<Input:> a reference to a hash of hashes
 
-B<Output:> a hash like the input-hash, but transposed (sort of). Think of it as if X and Y has swapped place.
+B<Output:> a hash like the input-hash, but matrix transposed (kind of). Think of it as if X and Y has swapped places.
 
  %h = ( 1 => {a=>33,b=>55},
         2 => {a=>11,b=>22},
@@ -827,7 +840,8 @@ B<Output:> a hash like the input-hash, but transposed (sort of). Think of it as 
 
 Gives:
 
- %v=('a'=>{'1'=>'33','2'=>'11','3'=>'88'},'b'=>{'1'=>'55','2'=>'22','3'=>'99'});
+ %v=( 'a'=>{'1'=>'33','2'=>'11','3'=>'88'},
+      'b'=>{'1'=>'55','2'=>'22','3'=>'99'} );
 
 =cut
 
@@ -854,13 +868,13 @@ B<Input:> One or two arguments.
 
 B<Output:>
 
-If the first argument is an arrayref: returns a random member of that array.
+If the first argument is an arrayref: returns a random member of that array without changing the array.
 
 Else: returns a random integer between the integers in argument one and two.
 
 Note: This is different from C<< int($from+rand($to-$from)) >> because that never returns C<$to>, but C<random()> will.
 
-If there is no second argument and the first is an integer, a random integer between 0 and that number is returned.
+If there is no second argument and the first is an integer, a random integer between 0 and that number is returned. Including 0 and the number itself.
 
 B<Examples:>
 
@@ -895,11 +909,136 @@ sub random
   return int($from+rand(1+$to-$from));
 }
 
+=head2 random_gauss
+
+Returns an pseudo-random number with a Gaussian distribution instead
+of the uniform distribution of perls C<rand()> or C<random()> in this
+module.  The algorithm is a variation of the one at
+L<http://www.taygeta.com/random/gaussian.html> which is both faster
+and better than adding a long series of C<rand()>.
+
+Uses perls C<rand> function internally.
+
+B<Input:> 0 - 3 arguments.
+
+First argument: the average of the distribution. Default 0.
+
+Second argument: the standard deviation of the distribution. Default 1.
+
+Third argument: If a third argument is present, C<random_gauss>
+returns an array of that many pseudo-random numbers. If there is no
+third argument, a number (a scalar) is returned.
+
+B<Output:> One or more pseudo-random numbers with a Gaussian distribution. Also known as a Bell curve or Normal distribution.
+
+Example:
+
+ my @I=random_gauss(100, 15, 100000);         # 100000 pseudo-randomg numbers, average=100, stddev=15
+ #my @I=map random_gauss(100, 15), 1..100000; # same but more than three times slower
+ print "Average is:    ".avg(@I)."\n";        # prints a number close to 100
+ print "Stddev  is:    ".stddev(@I)."\n";     # prints a number close to 15
+
+ my @M=grep $_>100+15*2, @I;                  # those above 130
+ print "Percent above two stddevs: ".(100*@M/@I)."%\n"; #prints a number close to 2.2%
+
+Example 2:
+
+ my $num=1e6;
+ my @h; $h[$_/2]++ for random_gauss(100,15, $num);
+ $h[$_] and printf "%3d - %3d %6d %s\n",
+   $_*2,$_*2+1,$h[$_],'=' x ($h[$_]*1000/$num)
+     for 1..200/2;
+
+...prints an example of the famous Bell curve:
+
+  44 -  45     70 
+  46 -  47    114 
+  48 -  49    168 
+  50 -  51    250 
+  52 -  53    395 
+  54 -  55    588 
+  56 -  57    871 
+  58 -  59   1238 =
+  60 -  61   1807 =
+  62 -  63   2553 ==
+  64 -  65   3528 ===
+  66 -  67   4797 ====
+  68 -  69   6490 ======
+  70 -  71   8202 ========
+  72 -  73  10577 ==========
+  74 -  75  13319 =============
+  76 -  77  16283 ================
+  78 -  79  20076 ====================
+  80 -  81  23742 =======================
+  82 -  83  27726 ===========================
+  84 -  85  32205 ================================
+  86 -  87  36577 ====================================
+  88 -  89  40684 ========================================
+  90 -  91  44515 ============================================
+  92 -  93  47575 ===============================================
+  94 -  95  50098 ==================================================
+  96 -  97  52062 ====================================================
+  98 -  99  53338 =====================================================
+ 100 - 101  52834 ====================================================
+ 102 - 103  52185 ====================================================
+ 104 - 105  50472 ==================================================
+ 106 - 107  47551 ===============================================
+ 108 - 109  44471 ============================================
+ 110 - 111  40704 ========================================
+ 112 - 113  36642 ====================================
+ 114 - 115  32171 ================================
+ 116 - 117  28166 ============================
+ 118 - 119  23618 =======================
+ 120 - 121  19873 ===================
+ 122 - 123  16360 ================
+ 124 - 125  13452 =============
+ 126 - 127  10575 ==========
+ 128 - 129   8283 ========
+ 130 - 131   6224 ======
+ 132 - 133   4661 ====
+ 134 - 135   3527 ===
+ 136 - 137   2516 ==
+ 138 - 139   1833 =
+ 140 - 141   1327 =
+ 142 - 143    860 
+ 144 - 145    604 
+ 146 - 147    428 
+ 148 - 149    275 
+ 150 - 151    184 
+ 152 - 153    111 
+ 154 - 155     67 
+
+=cut
+
+sub random_gauss
+{
+  my($avg,$stddev,$num)=@_;
+  $avg=0    if not defined $avg;
+  $stddev=1 if not defined $stddev;
+  $num=1    if not defined $num;
+  croak "random_gauss should not have more than 3 arguments" if @_>3;
+  my @r;
+  while (@r<$num) {
+    my($x1,$x2,$w);
+    do {
+      $x1=2.0*rand()-1.0;
+      $x2=2.0*rand()-1.0;
+      $w=$x1*$x1+$x2*$x2;
+    } while $w>=1.0;
+    $w=sqrt(-2.0*log($w)/$w) * $stddev;
+    push @r,  $x1*$w + $avg,
+              $x2*$w + $avg;
+  }
+  pop @r if @r > $num;
+  return $r[0] if @_<3;
+  return @r;
+}
+
 =head2 mix
 
-C<mix()> could also have been named C<shuffle()>, as in shuffleing a deck of cards.
+C<mix()> could also have been named C<shuffle()>, as in shuffling a deck of cards.
 
-C<List::Util::shuffle()> exists, and is approximately four times faster. Both respects C<srand()>.
+Note: C<List::Util::shuffle()> is approximately four times faster. Both respects C<srand()>.
 
 Example:
 
@@ -961,9 +1100,9 @@ sub mix
 
 =head1 COMPRESSION
 
-L</zipb64>, L</unzipb64>, L</zipbin>, L</unzipbin>, L</gzip>, og L</gunzip>
+L</zipb64>, L</unzipb64>, L</zipbin>, L</unzipbin>, L</gzip>, and L</gunzip>
 compresses and uncompresses strings to save space in disk, memory,
-database or network transfer. Trades speed for space.
+database or network transfer. Trades time for space. (Beware of wormholes)
 
 =head2 zipb64
 
@@ -1025,7 +1164,7 @@ Example 3, dictionary = string to be compressed: (out of curiosity)
   print length($zip3)," bytes output!\n";           # prints 25
   print "Hurra\n" if unzipb64($zip3,$txt) eq $txt;     # hipp hipp ...
 
-zipb64() og zipbin() is really just wrappers around L<Compress::Zlib> and C<inflate()> & co there.
+zipb64() and zipbin() is really just wrappers around L<Compress::Zlib> and C<inflate()> & co there.
 
 =cut
 
@@ -1192,7 +1331,7 @@ if the DNS lookup didn't find anything.
 
 Example:
 
- perl -MAcme::Tools -le 'print ipaddr("129.240.13.152")'  # prints www.uio.no
+ perl -MAcme::Tools -le 'print ipaddr("129.240.8.200")'  # prints www.uio.no
 
 Uses perls C<gethostbyaddr> internally.
 
@@ -1202,8 +1341,8 @@ particular IP number might take some time.
 
 Some few DNS loopups can take several seconds.
 Most is done in a fraction of a second. Due to this slowness, medium to high traffic web servers should
-probably turn off hostname lookups in their logs and just log IP numbers.
-That is  C<HostnameLookups Off> in Apache C<httpd.conf>.
+probably turn off hostname lookups in their logs and just log IP numbers by using
+C<HostnameLookups Off> in Apache C<httpd.conf> and then use I<ipaddr> afterwards if necessary.
 
 =cut
 
@@ -1227,8 +1366,8 @@ sub ipaddr
 C<ipnum()> does the opposite of C<ipaddr()>
 
 Does an attempt of converting an IP address (hostname) to an IP number.
-Uses DNS name servers by using perls internal C<gethostbyname()>.
-Return an empty string (undef) if unsuccessful.
+Uses DNS name servers via perls internal C<gethostbyname()>.
+Return empty string (undef) if unsuccessful.
 
  print ipnum("www.uio.no");   # prints 129.240.13.152
 
@@ -1240,8 +1379,12 @@ our %IPNUM_memo;
 sub ipnum
 {
   my $ipaddr=shift;
+  #croak "No $ipaddr" if not length($ipaddr);
   return $IPNUM_memo{$ipaddr} if exists $IPNUM_memo{$ipaddr};
-  my $ipnum = join(".",unpack("C4",gethostbyname($ipaddr)));
+  my $h=gethostbyname($ipaddr);
+  #croak "No ipnum for $ipaddr" if not $h;
+  return if not defined $h;
+  my $ipnum = join(".",unpack("C4",$h));
   $IPNUM_memo{$ipaddr} = $ipnum=~/^(\d+\.){3}\d+$/ ? $ipnum : undef;
   return $IPNUM_memo{$ipaddr};
 }
@@ -1250,23 +1393,22 @@ sub ipnum
 
 B<Input:> (optional)
 
-Zero or one input argument: A string of the same type often found behind the first question char (C<< ? >>) in URLs.
+Zero or one input argument: A string of the same type often found behind the first question mark (C<< ? >>) in URLs.
 
-This string can have two or more parts separated with C<&> chars.
+This string can have one or more parts separated by C<&> chars.
 
-And each part consists of C<key=value> pairs (with the first C<=> char being the separation char).
+Each part consists of C<key=value> pairs (with the first C<=> char being the separation char).
 
 Both C<key> and C<value> can be url-encoded.
 
 If there is no input argument, C<webparams> uses C<< $ENV{QUERY_STRING} >> instead.
 
-If also  C<< $ENV{QUERY_STRING} >> is lacking, C<webparams()> sees if C<< $ENV{REQUEST_METHOD} eq 'POST' >>.
-
+If also  C<< $ENV{QUERY_STRING} >> is lacking, C<webparams()> checks if C<< $ENV{REQUEST_METHOD} eq 'POST' >>.
 In that case C<< $ENV{CONTENT_LENGTH} >> is taken as the number of bytes to be read from C<STDIN>
-and those bytes are use as the missing input argument.
+and those bytes are used as the missing input argument.
 
 The environment variables QUERY_STRING, REQUEST_METHOD and CONTENT_LENGTH is
-typically set by a web server following the CGI standard (which apache and
+typically set by a web server following the CGI standard (which Apache and
 most of them can do I guess) or in mod_perl by Apache. Although you are
 probably better off using L<CGI>. Or C<< $R->args() >> or C<< $R->content() >> in mod_perl.
 
@@ -1274,29 +1416,30 @@ B<Output:>
 
 C<webparams()> returns a hash of the key/value pairs in the input argument. Url-decoded.
 
-If an input string contains more than one occurrence of the same key, that keys value in the returned hash will become concatenated each value separated by a C<,> char. (A comma char)
+If an input string has more than one occurrence of the same key, that keys value in the returned hash will become concatenated each value separated by a C<,> char. (A comma char)
 
 Examples:
 
  use Acme::Tools;
- print "Content-Type: text/plain\n\n";                          # or \cM\cJ\cM\cJ
  my %R=webparams();
+ print "Content-Type: text/plain\n\n";                          # or rather \cM\cJ\cM\cJ instead of \n\n to be http-compliant
  print "My name is $R{name}";
 
-Storing this little script in the directory designated for CGI-scripts
-on your web server (or naming the file .cgi perhaps), and C<chmod +x
+Storing those four lines in a file in the directory designated for CGI-scripts
+on your web server (or perhaps naming the file .cgi is enough), and C<chmod +x
 /.../cgi-bin/script> and the URL
 L<http://some.server.somewhere/cgi-bin/script?name=HAL> will print
 C<My name is HAL> to the web page.
 
-L<http://some.server.somewhere/cgi-bin/script?name=Bond&name=James+Bond> will print C<My name is Bond, James Bond>.
+L<http://some.server.somewhere/cgi-bin/script?name=Bond&name=+James+Bond> will print C<My name is Bond, James Bond>.
 
 =cut
 
 sub webparams
 {
-  my $query=shift()||$ENV{QUERY_STRING};
-  if(! $query && $ENV{REQUEST_METHOD} eq "POST"){
+  my $query=shift();
+  $query=$ENV{QUERY_STRING} if not defined $query;
+  if(not defined $query  and  $ENV{REQUEST_METHOD} eq "POST"){
     read(STDIN,$query , $ENV{CONTENT_LENGTH});
     $ENV{QUERY_STRING}=$query;
   }
@@ -1325,12 +1468,10 @@ chars can be URL encodes this way, but it's necessary just on some.
 Example:
 
  $search="Østdal, Åge";
- use LWP::Simple;
- my $url="http://machine.somewhere.com/cgi-bin/script?s=".urlenc($search);
+ my $url="http://machine.somewhere.com/search?q=" . urlenc($search);
  print $url;
- my $html = get($url);
 
-Prints C<< http://soda.uio.no/cgi/DB/person?id=%D8stdal%2C+%C5ge >>
+Prints C<< http://machine.somewhere.com/search?q=%D8stdal%2C%20%C5ge >>
 
 =cut
 
@@ -1353,7 +1494,6 @@ Example, this returns 'C< ø>'. That is space and C<< ø >>.
 
 sub urldec{
   my $str=shift;
-#  $str=~y/+/ /;
   $str=~s/\+/ /gs;
   $str=~s/%([a-f\d]{2})/pack("C", hex($1))/egi;
   return $str;
@@ -1426,7 +1566,7 @@ sub ht2t {
 
 =head2 chall
 
-Does chmod + utime + chown on one or more filer.
+Does chmod + utime + chown on one or more files.
 
 Returns the number of files of which those operations was successful.
 
@@ -1473,7 +1613,7 @@ Example:
 
 Returns true on success, otherwise false.
 
-C<makedir()> memoizes directories it has checked for existance before (trading memory for speed).
+C<makedir()> memoizes directories it has checked for existence before (trading memory for speed).
 
 See also C<< perldoc -f mkdir >>, C<< man umask >>
 
@@ -1505,7 +1645,7 @@ Example:
 
   my @list=qw/ABc XY DEF DEFG XYZ/;
   my $filter=qrlist("ABC","DEF","XY.");         # makes a regex of it qr/^(\QABC\E|\QDEF\E|\QXYZ\E)$/
-  my @filtered= grep { $_ =~ $filter } @list;   # returns DEF og XYZ, but not XYZ
+  my @filtered= grep { $_ =~ $filter } @list;   # returns DEF and XYZ, but not XYZ
 
 Note: hash lookups are WAY faster.
 
@@ -1530,7 +1670,7 @@ meaning and is replaced by color codings depending on the letter
 following the C<¤>.
 
 B<Output:> The same string, but with C<¤letter> replaces by ANSI color codes respected by many types terminal windows. (xterm, telnet, ssh,
-telnet, rlog, vt100, xterm, cygwin and such...).
+telnet, rlog, vt100, cygwin, rxvt and such...).
 
 B<Codes for ansicolor():>
 
@@ -1542,7 +1682,7 @@ B<Codes for ansicolor():>
  ¤B bold
  ¤u underline
  ¤c clear
- ¤¤ reset, quits and returns to default (black?) text color.
+ ¤¤ reset, quits and returns to default text color.
 
 B<Example:>
 
@@ -1553,7 +1693,7 @@ Prints I<This is maybe green?> where the word I<green> is shown in green.
 If L<Term::ANSIColor> is not installed or not found, returns the input
 string with every C<¤> including the following code letters
 removed. (That is: ansicolor is safe to use even if Term::ANSIColor is
-not installed, you just dont get the colors).
+not installed, you just don't get the colors).
 
 See also L<Term::ANSIColor>.
 
@@ -1788,7 +1928,7 @@ This is simpler:
 
 B<More examples:>
 
-Reading the content of the file to a scalar variable: (If C<$data> is non-empty, that will disappear)
+Reading the content of the file to a scalar variable: (Any content in C<$data> will be overwritten)
 
  my $data;
  readfile('filename.txt',\$data);
@@ -1857,7 +1997,7 @@ Name of a directory.
 
 B<Output:>
 
-A list of all files in it, except of  C<.> and C<..>
+A list of all files in it, except of  C<.> and C<..>  (on linux/unix systems, all directories have a C<.> and C<..> directory).
 
 The names of all types of files are returned: normal files, sub directories, symbolic links,
 pipes, semaphores. That is every thing shown by C<ls -la> except of C<.> and C<..>
@@ -1870,8 +2010,7 @@ B<Example:>
 
 B<Why?>
 
-Sometimes calling the built ins C<opendir>, C<readdir> og C<closedir>
-seems a bit tedious.
+Sometimes calling the built ins C<opendir>, C<readdir> and C<closedir> seems a bit tedious.
 
 This:
 
@@ -1885,6 +2024,14 @@ Is the same as this:
  my @files=readdirectory("/usr/bin");
 
 See also: L<File::Find>
+
+B<Why not?>
+
+If you got a huge directory with tens or even houndreds of thousands of
+files, readdirectory() uses more memory than perls opendir/readdir. This
+isn't usually a concern anymore for "normal" modern computers, but
+might be the rationale behind perls more tedious way created back in the 80s.
+The same argument often goes for file slurping.
 
 =cut
 
@@ -1911,15 +2058,18 @@ If two arguments: returns the array C<(x..y-1)>
 
 If three arguments: returns every I<jump>th number between C<x> and C<y>.
 
+Dies (croaks) if there are zero or more than 3 arguments, or if the third argument is zero.
+
 B<Examples:>
 
- print join ",", range(11);      # prints 0,1,2,3,4,5,6,7,8,9,10
- print join ",", range(2,11);    # prints 2,3,4,5,6,7,8,9,10
+ print join ",", range(11);      # prints 0,1,2,3,4,5,6,7,8,9,10      (but not 11)
+ print join ",", range(2,11);    # prints 2,3,4,5,6,7,8,9,10          (but not 11)
  print join ",", range(11,2,-1); # prints 11,10,9,8,7,6,5,4,3
  print join ",", range(2,11,3);  # prints 2,5,8
  print join ",", range(11,2,-3); # prints 11,8,5
+ print join ",", range(11,2,+3); # prints nothing
 
-In the Python language, C<range> is build in and works as an iterator instead of an array. This saves memory for big C<x> and C<y>s.
+In the Python language, C<range> is a build in and an iterator instead of an array. This saves memory for large sets.
 
 =cut
 
@@ -1928,21 +2078,10 @@ sub range
   my($x,$y,$jump)=@_;
   return (  0 .. $x-1 ) if @_==1;
   return ( $x .. $y-1 ) if @_==2;
-  die                   if @_!=3 or $jump==0;
-
+  croak "Wrong number of arguments or jump==0" if @_!=3 or $jump==0;
   my @r;
-  if($jump>0){
-    while($x<$y){
-      push @r, $x;
-      $x+=$jump;
-    }
-  }
-  else{
-    while($x>$y){
-      push @r, $x;
-      $x+=$jump;
-    }
-  }
+  if($jump>0){  while($x<$y){ push @r, $x; $x+=$jump } }
+  else       {  while($x>$y){ push @r, $x; $x+=$jump } }
   return @r;
 }
 
@@ -1952,10 +2091,10 @@ What is permutations?
 
 Six friends will be eating at a table with six chairs.
 
-How many ways (permutations) can those six be places in when the number of chairs = the number of people?
+How many ways (permutations) can those six be placed when the number of chairs equal the number of people?
 
  If one person:          one
- If who persons:         two     (they can swap places with each other)
+ If tho persons:         two     (they can swap places with each other)
  If three persons:       six
  If four persons:         24
  If five persons:        120
@@ -1980,8 +2119,10 @@ Run this to see the 100 first C<< n! >>
  10!  = 3628800
  .
  .
+ .
+ 100! = 93326215443944152681699238856266700490715968264381621468592963895217599993229915608941463976156518286253697920827223758251185210916864000000000000000000000000
 
-C<permutations()> takes a list a returns a list of arrayrefs for each
+C<permutations()> takes a list and return a list of arrayrefs for each
 of the permutations of the input list:
 
  permutations('a','b');     #returns (['a','b'],['b','a'])
@@ -1990,10 +2131,10 @@ of the permutations of the input list:
                             #         ['b','a','c'],['b','c','a'],
                             #         ['c','a','b'],['c','b','a'])
 
-For up to five input arguments C<permutations()> is as fast as it can be
-in this pure perl implementation. For more than fire, it could perhaps
-be faster. How fast is it now: Running with
-different n, this many time took this many seconds:
+Up to five input arguments C<permutations()> is probably as fast as it
+can be in this pure perl implementation (see source). For more than
+five, it could be faster. How fast is it now: Running with different
+n, this many time took that many seconds:
 
  n   times    seconds
  -- ------- ---------
@@ -2194,7 +2335,7 @@ B<Examples, this:>
    print "$a1,$a2,$a3\n";
  }
 
-Give the same output as this:
+Prints the same as this:
 
  for my $a1 (@a1){
    for my $a2 (@a2){
@@ -2211,7 +2352,7 @@ B<And this:> (with a condition: the sum of the first two should be dividable wit
    print "$a1,$a2,$a3\n";
  }
 
-Gives the same output as this:
+Prints the same as this:
 
  for my $a1 (@a1){
    for my $a2 (@a2){
@@ -2377,8 +2518,8 @@ sub code2num
 I< C<">The Euclidean algorithm (also called Euclid's algorithm) is an
 algorithm to determine the greatest common divisor (gcd) of two
 integers. It is one of the oldest algorithms known, since it appeared
-in Euclid's Elements around 300 BC. The algorithm does not require
-factoring.C<"> >
+in the classic Euclid's Elements around 300 BC. The algorithm does not
+require factoring.C<"> >
 
 B<Input:> two or more positive numbers (integers, without decimals that is)
 
@@ -2389,7 +2530,7 @@ B<Example:>
   print gcd(12, 8);   # prints 4
 
 Because (prime number) factoring of  12  is  2 * 2 * 3 and factoring 4 is 2 * 2
-og the common ('overlapping') for both 12 and 4 is then 2 * 2. The result is 4.
+and the common ('overlapping') for both 12 and 4 is then 2 * 2. The result is 4.
 
 B<Example two>:
 
@@ -2464,32 +2605,32 @@ each row ends up as data.
 Example:
 
  my @table=(
-               ["1997","Gina", "Weight", "Summer",66],
-               ["1997","Gina", "Height", "Summer",170],
+               ["1997","Gerd", "Weight", "Summer",66],
+               ["1997","Gerd", "Height", "Summer",170],
                ["1997","Per",  "Weight", "Summer",75],
                ["1997","Per",  "Height", "Summer",182],
                ["1997","Hilde","Weight", "Summer",62],
                ["1997","Hilde","Height", "Summer",168],
                ["1997","Tone", "Weight", "Summer",70],
  
-               ["1997","Gina", "Weight", "Winter",64],
-               ["1997","Gina", "Height", "Winter",158],
+               ["1997","Gerd", "Weight", "Winter",64],
+               ["1997","Gerd", "Height", "Winter",158],
                ["1997","Per",  "Weight", "Winter",73],
                ["1997","Per",  "Height", "Winter",180],
                ["1997","Hilde","Weight", "Winter",61],
                ["1997","Hilde","Height", "Winter",164],
                ["1997","Tone", "Weight", "Winter",69],
  
-               ["1998","Gina", "Weight", "Summer",64],
-               ["1998","Gina", "Height", "Summer",171],
+               ["1998","Gerd", "Weight", "Summer",64],
+               ["1998","Gerd", "Height", "Summer",171],
                ["1998","Per",  "Weight", "Summer",76],
                ["1998","Per",  "Height", "Summer",182],
                ["1998","Hilde","Weight", "Summer",62],
                ["1998","Hilde","Height", "Summer",168],
                ["1998","Tone", "Weight", "Summer",70],
  
-               ["1998","Gina", "Weight", "Winter",64],
-               ["1998","Gina", "Height", "Winter",171],
+               ["1998","Gerd", "Weight", "Winter",64],
+               ["1998","Gerd", "Height", "Winter",171],
                ["1998","Per",  "Weight", "Winter",74],
                ["1998","Per",  "Height", "Winter",183],
                ["1998","Hilde","Weight", "Winter",62],
@@ -2509,11 +2650,11 @@ Will print:
  Year Name  Height Height Weight Weight
             Summer Winter Summer Winter
  ---- ----- ------ ------ ------ ------
- 1997 Gina  170    158    66     64
+ 1997 Gerd  170    158    66     64
  1997 Hilde 168    164    62     61
  1997 Per   182    180    75     73
  1997 Tone                70     69
- 1998 Gina  171    171    64     64
+ 1998 Gerd  171    171    64     64
  1998 Hilde 168    168    62     62
  1998 Per   182    183    76     74
  1998 Tone                70     71
@@ -2528,7 +2669,7 @@ Will print:
  Report B
  
  Year Season Height Height Height Weight Weight Weight Weight
-             Gina   Hilde  Per    Gina   Hilde  Per    Tone
+             Gerd   Hilde  Per    Gerd   Hilde  Per    Tone
  ---- ------ ------ ------ -----  -----  ------ ------ ------
  1997 Summer 170    168    182    66     62     75     70
  1997 Winter 158    164    180    64     61     73     69
@@ -2547,8 +2688,8 @@ Will print:
  Name  Attributt 1997   1997   1998   1998
                  Summer Winter Summer Winter
  ----- --------- ------ ------ ------ ------
- Gina  Height     170    158    171    171
- Gina  Weight      66     64     64     64
+ Gerd  Height     170    158    171    171
+ Gerd  Weight      66     64     64     64
  Hilde Height     168    164    168    168
  Hilde Weight      62     61     62     62
  Per   Height     182    180    182    183
@@ -2568,7 +2709,7 @@ Will print:
        1997   1997   1998   1998   1997   1997   1998   1998
        Summer Winter Summer Winter Summer Winter Summer Winter
  ----- ------ ------ ------ ------ ------ ------ ------ ------
- Gina  170    158    171    171    66     64     64     64
+ Gerd  170    158    171    171    66     64     64     64
  Hilde 168    164    168    168    62     61     62     62
  Per   182    180    182    183    75     73     76     74
  Tone                              70     69     70     71
@@ -2664,28 +2805,34 @@ sub _sortsub {
 
 =head2 tablestring
 
-B<Input:> a reference to an array of arrayrefs (a two dimensional table of values)
+B<Input:> a reference to an array of arrayrefs  -- a two dimensional table of strings and numbers
 
-B<Output:> a string containing the table (a string of two or normally more lines)
+B<Output:> a string containing the textual table -- a string of two or more lines
 
 The first arrayref in the list refers to a list of either column headings (scalar)
 or ... (...more later...)
 
 In this output table:
 
-- the columns are not broader than necessary
+- the columns will not be wider than necessary by its widest value (any <html>-tags are removed in every internal width-calculation)
 
-- multi lined cell values are handled also
+- multi-lined cell values are handled also
 
 - and so are html-tags, if the output is to be used inside <pre>-tags on a web page.
 
-- columns with just numbers are right justified
+- columns with just numeric values are right justified (header row excepted)
 
 Example:
 
- perl -MAcme::Tools -le 'print tablestring([[qw/AA BB CCCC/],[123,23,"d"],[12,23,34],[77,88,99],["lin\nes",12,"asdff\nfdsa\naa"],[0,22,"adf"]])'
+ print tablestring([
+   [qw/AA BB CCCC/],
+   [123,23,"d"],
+   [12,23,34],
+   [77,88,99],
+   ["lin\nes",12,"asdff\nfdsa\naa"],[0,22,"adf"]
+ ]);
 
-Prints this multi lined string:
+Prints this string of 11 lines:
 
  AA  BB CCCC
  --- -- -----
@@ -2699,7 +2846,7 @@ Prints this multi lined string:
  
  10  22 adf
 
-Rows containing multi lined cells gets an empty line before and after the row, to separate it more clearly.
+As you can see, rows containing multi-lined cells gets an empty line before and after the row to separate it more clearly.
 
 =cut
 
@@ -3352,11 +3499,15 @@ Return the same number as perls C<time()> except with decimals (fractions of a s
 Could write:
 
  1116776232.38632
- 1116776232
 
 ...if that is the time now.
 
-C<time_fp()> C<requires>  L<Time::HiRes> and if that module is not installed or not available, it returns the result of C<time()>.
+Or just:
+
+ 1116776232
+
+...from perl's internal C<time()> if C<Time::HiRes> isn't installed and available.
+
 
 =cut
 
@@ -3380,6 +3531,564 @@ some extra time first time called. To avoid that, use C<< use Time::HiRes >> in 
 
 sub sleep_fp{ eval{require Time::HiRes} or (sleep(shift()),return);Time::HiRes::sleep(shift()) }
 
+=head2 bytes_readable
+
+Input: a number
+
+Output:
+
+the number with a B behind if the number is less than 1024 (2**10)
+
+the number divided by 1024 with two decimals and "kB" behind if the number is less than 1048576 (2**20 ~ 1000)
+
+the number divided by 1048576 with two decimals and "MB" behind if the number is less than 1073741824 (2**30 ~ 1 million)
+
+the number divided by 1073741824 with two decimals and "GB" behind if the number is less than 1099511627776 (2**40 ~ 1 billion)
+
+the number divided by 1099511627776 with two decimals and "TB" behind otherwise
+
+=cut
+
+sub bytes_readable
+{
+  my $bytes=shift();
+  return undef if not defined $bytes;
+  return "$bytes B"                      if abs($bytes)<2** 0*1000; #bytes
+  return sprintf("%.2f kB",$bytes/2**10) if abs($bytes)<2**10*1000; #kilobyte
+  return sprintf("%.2f MB",$bytes/2**20) if abs($bytes)<2**20*1000; #megabyte
+  return sprintf("%.2f GB",$bytes/2**30) if abs($bytes)<2**30*1000; #gigabyte
+  return sprintf("%.2f TB",$bytes/2**40) if abs($bytes)<2**40*1000; #terrabyte
+  return sprintf("%.2f PB",$bytes/2**50); #petabyte, exabyte, zettabyte, yottabyte
+}
+
+
+# =head1 veci
+# 
+# Perls C<vec> takes 1, 2, 4, 8, 16, 32 and possibly 64 as its third argument.
+# 
+# This limitation is removed with C<veci> (vec improved, but much slower)
+# 
+# The third argument still needs to be 32 or lower (or possibly 64 or lower).
+# 
+# =cut
+# 
+# sub vecibs ($)
+# {
+#   my($s,$o,$b,$new)=@_;
+#   if($b=~/^(1|2|4|8|16|32|64)$/){
+#     return vec($s,$o,$b)=$new if @_==4;
+#     return vec($s,$o,$b);
+#   }
+#   my $bb=$b<4?4:$b<8?8:$b<16?16:$b<32?32:$b<64?64:die;
+#   my $ob=int($o*$b/$bb);
+#   my $v=vec($s,$ob,$bb)*2**$bb+vec($s,$ob+1,$bb);
+#   $v & (2**$b-1)
+# }
+
+=head1 Bloom filter subroutines
+
+Bloom filters can be used to check whether an element (a string) is a
+member of a large set using much less memory or disk space than other
+data structures. Trading speed and accuracy for memory usage. While
+risking false positives, Bloom filters have a very strong space
+advantage over other data structures for representing sets.
+
+In the example below, a set of 100000 phone numbers (or any string of
+any length) can be "stored" in just 11992 bytes if you accept that you
+can only check the data structure for existence of a string and accept
+false positives with an error rate of 0.01 (that is one percent, error
+rates are given in numbers larger then 0 and smaller than 1).
+
+You can not retrieve the strings in the set without using "brute
+force" methods and even then you would get slightly more strings than
+you put in because of the error rate inaccuracy.
+
+Bloom Filters have many uses.
+
+See also: L<http://en.wikipedia.org/wiki/Bloom_filter>
+
+See also: L<Bloom::Filter>
+
+=head2 bfinit
+
+Initialize a new Bloom Filter:
+
+  my $bf = bfinit( error_rate=>0.01, capacity=>100000 );
+
+The same:
+
+  my $bf = bfinit( 0.01, 100000 );
+
+since two arguments is interpreted as error_rate and capacity accordingly.
+
+
+=head2 bfadd
+
+  bfadd($bf, $_) for @phone_numbers;   # Adding strings one at a time
+
+  bfadd($bf, @phone_numbers);          # ...or all at once (faster)
+
+Returns 1 on success. Dies (croaks) if more strings than capacity is added.
+
+=head2 bfcheck
+
+  my $phone_number="97713246";
+  if ( bfcheck($bf, $phone_number) ) {
+    print "Yes, $phone_number was PROBABLY added\n";
+  }
+  else{
+    print "No, $phone_number was DEFINITELY NOT added\n";
+  }
+
+Returns true if C<$phone_number> exists in C<@phone_numbers>.
+
+Returns false most of the times, but sometimes true*), if C<$phone_number> doesn't exists in C<@phone_numbers>.
+
+*) This is called a false positive.
+
+Checking more than one key:
+
+ @bools = bfcheck($bf, @keys);    #or ...
+ @bools = bfcheck($bf, \@keys);   #better if @keys is large
+
+Returns an array the same size as @keys where each element is true or false accordingly.
+
+=head2 bfgrep
+
+Same as C<bfcheck> except it returns the keys that exists in the bloom filter
+
+ @found = bfgrep($bf, @keys);           #or ...
+ @found = bfgrep($bf, \@keys);          #better if @keys is large, or ...
+ @found = grep bfcheck($bf,$_), @keys;  #same but slower
+
+=head2 bfgrepnot
+
+Same as C<bfgrep> except it returns the keys that NOT exists in the bloom filter:
+
+ @not_found = bfgrepnot($bf, @keys);          #or ...
+ @not_found = bfgrepnot($bf, \@keys);         #better if @keys is large
+ @not_found = grep !bfcheck($bf,$_), @keys);  #same but slower
+
+=head2 bfdelete
+
+Deletes from a counting bloom filter.
+
+To enable deleting be sure to initialize the bloom filter with the
+numeric C<counting_bits> argument. The number of bits could be 2 or 3
+for small filters with a small capacity (a small number of keys), but
+setting the number to 4 ensures that even very large filters with very
+small error rates would not overflow.
+
+Since Acme::Tools does not currently support C<<counting_bits => 3>>,
+4 or 8 is the only practical alternatives. 
+
+ my $bf=bfinit(
+   error_rate=>0.001,
+   capacity=>10e6,
+   counting_bits=>4     # a power of 2, i.e. 2, 4, 8, 16 or 32
+ );
+ bfadd(   $bf, @phone_numbers);     # make sure the phone numbers are unique!
+ bfdelete($bf, @phone_numbers);
+
+To examine the frequency of the counters with 4 bit counters and 4 million keys:
+
+ my $bf=bfinit( error_rate=>0.001, capacity=>4e6, counting_bits=>4 );
+ bfadd($bf,[1e3*$_+1 .. 1e3*($_+1)]) for 0..4000-1;  # adding 4 million keys one thousand at a time
+ my %c; $c{vec($$bf{filter},$_,$$bf{counting_bits})}++ for 0..$$bf{filterlength}-1;
+ printf "%8d counters is %2d\n",$c{$_},$_ for sort{$a<=>$b}keys%c;
+
+The output:
+
+ 28689562 counters is  0
+ 19947673 counters is  1
+  6941082 counters is  2
+  1608250 counters is  3
+   280107 counters is  4
+    38859 counters is  5
+     4533 counters is  6
+      445 counters is  7
+       46 counters is  8
+        1 counters is  9
+
+Even after the error_rate is changed from 0.001 to a percent of that, 0.00001, the limit of 16 (4 bits) is still far away:
+
+ 47162242 counters is  0
+ 33457237 counters is  1
+ 11865217 counters is  2
+  2804447 counters is  3
+   497308 counters is  4
+    70608 counters is  5
+     8359 counters is  6
+      858 counters is  7
+       65 counters is  8
+        4 counters is  9
+
+In algorithmic terms the number of bits needed is C<ln of ln of n>.
+Thats why 4 bits (counters up to 15) is "always" good enough.
+
+(Except when adding the same key many times, Acme::Tools::bfadd does
+not check for that).
+
+Counting bloom filters are not very space efficient: The tables above shows that 84%-85% of the counters are 0 or 1. Most bits are zero-bits.
+
+=head2 bfdelete
+
+Deletes from a counting bloom filter:
+
+ bfdelete($bf, @keys);
+
+Returns C<$bf> after deletion.
+
+=head2 bfaddbf
+
+Adds another bloom filter to a bloom filter.
+
+Bloom filters has the proberty that bit-wise I<or>-ing the bit-filters
+of two filters with the same capacity and the same number and type of
+hash functions, adds the filters:
+
+  my $bf1=bfinit(error_rate=>0.01,capacity=>$cap,keys=>[1..500]);
+  my $bf2=bfinit(error_rate=>0.01,capacity=>$cap,keys=>[501..1000]);
+
+  bfaddbf($bf1,$bf2);
+
+  print "Yes!" if bfgrep($bf1, 1..1000) == 1000;
+
+Prints yes since C<bfgrep> now returns an array of all the 1000 elements.
+
+Croaks if the filters are of different dimentions.
+
+Works for counting bloom filters as well (C<counting_bits=>4> e.g.)
+
+=head2 bfsum
+
+Returns the number of 1's in the filter.
+
+ my $percent=100*bfsum($bf)/$$bf{filterlength};
+ printf "The filter is %.1f%% filled\n",$percent; #prints 50.0% or so if filled to capacity
+
+Sums the counters for counting bloom filters (much slower than for non counting).
+
+=head2 bfstore
+
+Storing and retrieving bloom filters to and from disk uses L<Storable>s C<store> and C<retrieve>. This:
+
+ bfstore($bf,'filename.bf');
+
+It the same as:
+
+ use Storable qw(store retrieve);
+ ...
+ store($bf,'filename.bf');
+
+=head2 bfretrieve
+
+This:
+
+ my $bf=bfretrieve('filename.bf');
+
+Or this:
+
+ my $bf=bfinit('filename.bf');
+
+Is the same as:
+
+ use Storable qw(store retrieve);
+ my $bf=retrieve('filename.bf');
+
+=head2 bfclone
+
+This:
+
+ my $bfc = bfclone($bf);
+
+Is the same as:
+
+ use Storable;
+ my $bfc=Storable::dclone($bf);
+
+=head2 Object oriented interface
+
+ my $bf=new Acme::Tools::BloomFilter(0.1,1000); #see bfinit above, the same as new
+ print ref($bf),"\n";                        # prints Acme::Tools:BloomFilter
+ $bf->add(@keys);
+ $bf->check($keys[0]) and print "ok\n";      # prints ok
+ $bf->grep(\@keys)==@keys and print "ok\n";  # prints ok
+ $bf->store('filename.bf');
+ my $bf2=bfretrieve('filename.bf');
+ $bf2->check($keys[0]) and print "ok\n";  # still ok
+
+ $bf2=$bf->clone();
+
+To instantiate a previously stored b.f.:
+
+ my $bf = Acme::Tools::BloomFilter->new( '/path/to/stored/bloomfilter.bf' );
+
+The o.o. interface has the same methods as the C<bf...>-subs, without the
+C<bf>-prefix in the names. The C<bfretrieve> is not available as a
+method, although C<bfretrieve>, C<Acme::Tools::bfretrieve> and
+C<Acme::Tools::BloomFilter::bfretrieve> are synonyms.
+
+=head2 Theory and math behind
+
+L<http://www.internetmathematics.org/volumes/1/4/Broder.pdf>
+
+L<http://blogs.sun.com/jrose/entry/bloom_filters_in_a_nutshell>
+
+L<http://pages.cs.wisc.edu/~cao/papers/summary-cache/node8.html>
+
+See also Scaleable Bloom Filters: L<http://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf> (not implemented here)
+
+=cut
+
+sub bfinit
+{
+  return bfretrieve(@_)                             if @_==1;
+  return bfinit(error_rate=>$_[0], capacity=>$_[1]) if @_==2 and 0<$_[0] and $_[0]<1 and $_[1]>1;
+  return bfinit(error_rate=>$_[1], capacity=>$_[0]) if @_==2 and 0<$_[1] and $_[1]<1 and $_[0]>1;
+  require Digest::MD5;
+  @_%2&&croak "Arguments should be a hash of equal number of keys and values";
+  my %arg=@_;
+  my @ok_param=qw/error_rate capacity min_hashfuncs max_hashfuncs hashfuncs counting_bits adaptive keys/;
+  my @not_ok=sort(grep!in($_,@ok_param),keys%arg);
+  croak "Not ok param to bfinit: ".join(", ",@not_ok) if @not_ok;
+  croak "Not an arrayref in keys-param" if exists $arg{keys} and ref($arg{keys}) ne 'ARRAY';
+  croak "Not implemented counting_bits=$arg{counting_bits}, should be 2, 4, 8, 16 or 32" if not in(nvl($arg{counting_bits},1),1,2,4,8,16,32);
+  croak "An bloom filters here can not be in both adaptive and counting_bits modes" if $arg{adaptive} and $arg{counting_bits}>1;
+  my $bf={error_rate    => 0.001,  #default p
+	  capacity      => 100000, #default n
+          min_hashfuncs => 1,
+          max_hashfuncs => 100,
+	  counting_bits => 1,      #default: not counting filter
+	  adaptive      => 0,
+	  %arg,                    #arguments
+	  key_count     => 0,
+	  overflow      => {},
+	  version       => $Acme::Tools::VERSION,
+	 };
+  croak "Error rate ($$bf{error_rate}) should be larger than 0 and smaller than 1" if $$bf{error_rate}<=0 or $$bf{error_rate}>=1;
+  @$bf{'min_hashfuncs','max_hashfuncs'}=(map$arg{hashfuncs},1..2) if $arg{hashfuncs};
+  @$bf{'filterlength','hashfuncs'}=bfdimentions($bf); #m and k
+  $$bf{unpack}=$$bf{filterlength}<=2**16?"n*":$$bf{filterlength}<=2**32?"N*":"Q*";
+  $$bf{filter}=pack("b*", '0' x ($$bf{filterlength}*$$bf{counting_bits}) ); #hm x   new empty filter
+  bfadd($bf,@{$arg{keys}}) if $arg{keys};
+  return $bf;
+}
+sub bfaddbf {
+  my($bf,$bf2)=@_;
+  my $differror=join"\n",
+    map "Property $_ differs ($$bf{$_} vs $$bf2{$_})",
+    grep $$bf{$_} ne $$bf2{$_},
+    qw/capacity counting_bits adaptive hashfuncs filterlength/; #not error_rate
+  croak $differror if $differror;
+  croak "Can not add adaptive bloom filters" if $$bf{adaptive};
+  my $count=$$bf{key_count}+$$bf2{key_count};
+  croak "Exceeded filter capacity $$bf{key_count} + $$bf2{key_count} = $count > $$bf{capacity}"
+    if $count > $$bf{capacity};
+  $$bf{key_count}+=$$bf2{key_count};
+  if($$bf{counting_bits}==1){
+    $$bf{filter} |= $$bf2{filter};
+    #$$bf{filter} = $$bf{filter} | $$bf2{filter}; #or-ing 
+  }
+  else {
+    my $cb=$$bf{counting_bits};
+    for(0..$$bf{filterlength}-1){
+      my $sum=
+      vec($$bf{filter}, $_,$cb)+
+      vec($$bf2{filter},$_,$cb);
+      if( $sum>2**$cb-1 ){
+	$sum=2**$cb-1;
+	$$bf{overflow}{$_}++;
+      }
+      vec($$bf{filter}, $_,$cb)=$sum;
+      no warnings;
+      $$bf{overflow}{$_}+=$$bf2{overflow}{$_}
+	and keys(%{$$bf{overflow}})>10 #hmm, arbitrary limit
+	and croak "Too many overflows, concider doubling counting_bits from $cb to ".(2*$cb)
+	if exists $$bf2{overflow}{$_};
+    }
+  }
+  return $bf; #for convenience
+}
+sub bfsum {
+  my($bf)=@_;
+  return unpack( "%32b*", $$bf{filter}) if $$bf{counting_bits}==1;
+  my($sum,$cb)=(0,$$bf{counting_bits});
+  $sum+=vec($$bf{filter},$_,$cb) for 0..$$bf{filterlength}-1;
+  return $sum;
+}
+sub bfadd
+{ require Digest::MD5;
+  my($bf,@keys)=@_;
+  return if not @keys;
+  my $keysref=@keys==1 && ref($keys[0]) eq 'ARRAY' ? $keys[0] : \@keys;
+  my($m,$k,$up,$n,$cb,$adaptive)=@$bf{'filterlength','hashfuncs','unpack','capacity','counting_bits','adaptive'};
+  for(@$keysref){
+    #croak "Key should be scalar" if ref($_);
+    $$bf{key_count} >= $n and croak "Exceeded filter capacity $n"  or  $$bf{key_count}++;
+    my @h; push @h, unpack $up, Digest::MD5::md5($_,0+@h) while @h<$k;
+    if ($cb==1 and not $adaptive) { # normal bloom filter
+      vec($$bf{filter}, $h[$_] % $m, 1) = 1 for 0..$k-1;
+    }
+    elsif ($cb>1) {                 # counting bloom filter
+      for(0..$k-1){
+	my $pos=$h[$_] % $m;
+	my $c=
+  	vec($$bf{filter}, $pos, $cb) =
+	vec($$bf{filter}, $pos, $cb) + 1;
+	if($c==0){
+	  vec($$bf{filter}, $pos, $cb) = -1;
+	  $$bf{overflow}{$pos}++
+	    and keys(%{$$bf{overflow}})>10 #hmm, arbitrary limit
+	    and croak "Too many overflows, concider doubling counting_bits from $cb to ".(2*$cb);
+	}
+      }
+    }
+    elsif ($adaptive) {             # adaptive bloom filter
+      my($i,$key,$bit)=(0+@h,$_);
+      for(0..$$bf{filterlength}-1){
+	$i+=push(@h, unpack $up, Digest::MD5::md5($key,$i)) if not @h;
+	my $pos=shift(@h) % $m;
+	$bit=vec($$bf{filter}, $pos, 1);
+	vec($$bf{filter}, $pos, 1)=1;
+	last if $_>=$k-1 and $bit==0;
+      }
+    }
+    else {croak}
+  }
+  return 1;
+}
+sub bfcheck
+{ require Digest::MD5;
+  my($bf,@keys)=@_;
+  return if not @keys;
+  my $keysref=@keys==1 && ref($keys[0]) eq 'ARRAY' ? $keys[0] : \@keys;
+  my($m,$k,$up,$cb,$adaptive)=@$bf{'filterlength','hashfuncs','unpack','counting_bits','adaptive'};
+  my $wa=wantarray();
+  if(not $adaptive){ # normal bloom filter  or  counting bloom filter
+    return map {
+      my $match = 1; # match if every bit is on
+      my @h; push @h, unpack $up, Digest::MD5::md5($_,0+@h) while @h<$k;
+      vec($$bf{filter}, $h[$_] % $m, $cb) or $match=0 or last for 0..$k-1;
+      return $match if not $wa;
+      $match;
+    } @$keysref;
+  }
+  else {             # adaptive bloom filter
+    return map {
+      my($match,$i,$key,$bit,@h)=(1,0,$_);
+      for(0..$$bf{filterlength}-1){
+	$i+=push(@h, unpack $up, Digest::MD5::md5($key,$i)) if not @h;
+	my $pos=shift(@h) % $m;
+	$bit=vec($$bf{filter}, $pos, 1);
+	$match++ if $_ >  $k-1 and $bit==1;
+	$match=0 if $_ <= $k-1 and $bit==0;
+	last     if $bit==0;
+      }
+      return $match if not $wa;
+      $match;
+    } @$keysref;
+  }
+}
+sub bfgrep # just a copy of bfcheck with map replaced by grep
+{ require Digest::MD5;
+  my($bf,@keys)=@_;
+  return if not @keys;
+  my $keysref=@keys==1 && ref($keys[0]) eq 'ARRAY' ? $keys[0] : \@keys;
+  my($m,$k,$up,$cb)=@$bf{'filterlength','hashfuncs','unpack','counting_bits'};
+  return grep {
+    my $match = 1; # match if every bit is on
+    my @h; push @h, unpack $up, Digest::MD5::md5($_,0+@h) while @h<$k;
+    vec($$bf{filter}, $h[$_] % $m, $cb) or $match=0 or last for 0..$k-1;
+    $match;
+  } @$keysref;
+}
+sub bfgrepnot # just a copy of bfgrep with $match replaced by not $match
+{ require Digest::MD5;
+  my($bf,@keys)=@_;
+  return if not @keys;
+  my $keysref=@keys==1 && ref($keys[0]) eq 'ARRAY' ? $keys[0] : \@keys;
+  my($m,$k,$up,$cb)=@$bf{'filterlength','hashfuncs','unpack','counting_bits'};
+  return grep {
+    my $match = 1; # match if every bit is on
+    my @h; push @h, unpack $up, Digest::MD5::md5($_,0+@h) while @h<$k;
+    vec($$bf{filter}, $h[$_] % $m, $cb) or $match=0 or last for 0..$k-1;
+    not $match;
+  } @$keysref;
+}
+sub bfdelete
+{ require Digest::MD5;
+  my($bf,@keys)=@_;
+  return if not @keys;
+  my $keysref=@keys==1 && ref($keys[0]) eq 'ARRAY' ? $keys[0] : \@keys;
+  my($m,$k,$up,$cb)=@$bf{'filterlength','hashfuncs','unpack','counting_bits'};
+  croak "Cannot delete from non-counting bloom filter (use counting_bits 4 e.g.)" if $cb==1;
+  for my $key (@$keysref){
+    my @h; push @h, unpack $up, Digest::MD5::md5($key,0+@h) while @h<$k;
+    $$bf{key_count}==0 and croak "Deleted all and then some"  or  $$bf{key_count}--;
+    my $ones=0;
+    for(0..$k-1){
+      my $pos=$h[$_] % $m;
+      my $c=vec($$bf{filter}, $pos, $cb);
+      croak "Cannot delete a non-existing key $key" if $c==0;
+      vec($$bf{filter}, $pos, $cb)=$c-1;
+      croak "Cannot delete a previously overflown position" if $c==1 and ++$ones and $$bf{overflow}{$pos};
+    }
+  }
+  return $bf;
+}
+sub bfstore
+{
+  require Storable;
+  Storable::store(@_);
+}
+sub bfretrieve
+{
+  require Storable;
+  my $bf=Storable::retrieve(@_);
+  carp "Retrieved bloom filter was stored in version $$bf{version}, this is version $VERSION" if $$bf{version}>$VERSION;
+  return $bf;
+}
+sub bfclone
+{
+  require Storable;
+  return Storable::dclone(@_);
+}
+
+sub bfdimentions
+{
+  my($n,$p,$mink,$maxk, $k,$flen,$m)=
+    @_==1 ? (@{$_[0]}{'capacity','error_rate','min_hashfuncs','max_hashfuncs'},1)
+   :@_==2 ? (@_,1,100,1)
+          : croak "Wrong number of arguments (".@_."), should be 2";
+  $m=-1*$_*$n/log(1-$p**(1/$_)) and (!defined $flen or $m<$flen) and ($flen,$k)=($m,$_) for $mink..$maxk;
+  $flen = int(1+$flen);
+  return ($flen,$k);
+}
+
+1;
+
+package Acme::Tools::BloomFilter;
+use 5.008;
+use strict;
+#use warnings;
+use Carp;
+sub new 
+{
+  my($class,@p)=@_;
+  my $self=Acme::Tools::bfinit(@p);
+  return bless $self, $class;
+}
+sub add      {&Acme::Tools::bfadd}
+sub addbf    {&Acme::Tools::bfaddbf}
+sub check    {&Acme::Tools::bfcheck}
+sub grep     {&Acme::Tools::bfgrep}
+sub grepnot  {&Acme::Tools::bfgrepnot}
+sub delete   {&Acme::Tools::bfdelete}
+sub store    {&Acme::Tools::bfstore}
+sub retrieve {&Acme::Tools::bfretrieve}
+sub clone    {&Acme::Tools::bfclone}
+sub sum      {&Acme::Tools::bfsum}
 1;
 __END__
 
@@ -3387,18 +4096,19 @@ __END__
 
 Release history
 
- 0.11   Dec 2008     Improved doc
+ 0.12   Oct 2010   Improved tests, doc, bloom filter, random_gauss, bytes_readable
+ 0.11   Dec 2008   Improved doc
  0.10   Dec 2008
 
 =head1 SEE ALSO
 
 =head1 AUTHOR
 
-Kjetil Skotheim, E<lt>kjetil.skotheim@gmail.com<gt>, E<lt>kjetil.skotheim@usit.uio.noE<gt>
+Kjetil Skotheim, E<lt>kjetil.skotheim@gmail.comE<gt>, E<lt>kjetil.skotheim@usit.uio.noE<gt>
 
 =head1 COPYRIGHT AND LICENSE
 
-1995-2008, Kjetil Skotheim
+1995-2010, Kjetil Skotheim
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
