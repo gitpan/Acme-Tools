@@ -3,19 +3,16 @@
 # time ( perl Makefile.PL;make;ATDEBUG=1 perl -Iblib/lib t/3_bloomfilter.t )
 use strict;
 use warnings;
-use Test::More tests => 28;
+use Test::More tests => 29;
 sub deb($){print STDERR @_ if $ENV{ATDEBUG}}
 BEGIN { use_ok('Acme::Tools') };
 
 my $error_rate=0.02;
 my $capacity=10000;
 my $bf=bfinit($error_rate, $capacity);
-#$bf=bfinit(error_rate=>$error_rate, capacity=>$capacity,max_hashfuncs=>4);
-#$bf=bfinit(error_rate=>$error_rate, capacity=>$capacity*10,hashfuncs=>4);
-#print STDERR serialize($bf,'bf','',1);
 my $t=time_fp();
 bfadd($bf, map $_*2,0..$capacity-1);
-#print STDERR "Adds pr sec: ".int($capacity/(time_fp()-$t))."\n";
+#deb "Adds pr sec: ".int($capacity/(time_fp()-$t))."\n";
 #bfadd($bf, $_) for map $_*2,0..$capacity-1;
 
 deb serialize({%$bf,filter=>''},'bf','',1);
@@ -38,7 +35,7 @@ ok(
             100*$sum/($capacity*$error_rate)
 );
 eval{bfinit(a=>1,b=>2)};
-#print STDERR $@;
+#deb $@;
 ok($@=~/Not ok param to bfinit: a, b\b/,'param check');
 
 eval{bfinit(capacity=>10,keys=>[1..11])};
@@ -46,7 +43,7 @@ ok($@=~/Exceeded filter capacity 10/,'capacity check');
 
 eval{bfinit(error_rate=>0.0,capacity=>1e3)};ok($@=~/\QError rate (0) should be larger than 0 and smaller than 1\E/,'error_rate check1');
 eval{bfinit(error_rate=>1.0,capacity=>1e3)};ok($@=~/\QError rate (1) should be larger than 0 and smaller than 1\E/,'error_rate check2');
-#print STDERR "<<$@>>\n";
+#deb "<<$@>>\n";
 
 #---------- OO
 my $bfoo=new Acme::Tools::BloomFilter(0.1,1000);
@@ -81,13 +78,15 @@ ok(sum(map$c{$_}*$_,keys%c)/$$cbf{key_count} == $$cbf{hashfuncs}, 'counter check
 do{
   my($er,$cap,$cb)=(0.1,500,4);
   my $bf=bfinit(error_rate=>$er,capacity=>$cap*2,counting_bits=>$cb,keys=>[1..$cap*2]);
-  bfdelete($bf,$cap+1..$cap*2);
+  bfdelete($bf, $cap+1 .. $cap*1.5);
+  bfdelete($bf,[$cap*1.5+1 .. $cap*2]);
   ok(bfgrep($bf,[1..$cap]) == $cap, 'cbf, delete test, no false negatives');
   my $err=bfgrep($bf,[$cap+1..$cap*2]);
   deb "Err $err\n";
   ok($err/$cap/$er<1.3,"cbf, delete test, after delete ($err)");
   my %c=(); $c{vec($$bf{filter},$_,$cb)}++ for 0..$$bf{filterlength}-1;
   ok(sum(map$c{$_}*$_,keys%c)/$$bf{key_count} == $$bf{hashfuncs}, 'cbf, delete test, counter check after delete');
+  eval{ok(bfdelete($bf,'x'))};ok($@=~/Cannot delete a non-existing key x/,'delete non-existing key');
 };
 
 #---------- test filter lengths
@@ -113,7 +112,7 @@ if($^O eq 'linux'){
   unlink $file;
 }
 else{
-  ok(1,'skipped, not linux') for 1..2;
+  ok(1,'skipped, not linux') for 1..3;
 }
 
 #----------adaptive bloom filter, not implemented/tested, see http://intertrack.naist.jp/Matsumoto_IEICE-ED200805.pdf

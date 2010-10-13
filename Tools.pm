@@ -1,8 +1,6 @@
 package Acme::Tools;
 
-#http://en.wikipedia.org/wiki/Birthday_problem#Approximations
-
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 
 use 5.008;
 use strict;
@@ -23,6 +21,9 @@ our @EXPORT = qw(
  stddev
  median
  percentile
+ $Resolve_iterations
+ $Resolve_last_estimate
+ resolve
  random
  random_gauss
  nvl
@@ -96,7 +97,7 @@ our @EXPORT = qw(
  bfstore
  bfretrieve
  bfclone
- bfdimentions
+ bfdimensions
 );
 
 =head1 NAME
@@ -144,7 +145,7 @@ Almost every sub, about 60 of them.
 
 Beware of name space pollution. But what did you expect from an acme module?
 
-=head1 NUMBER, SETS, STATISTICS
+=head1 NUMBERS, SETS, STATISTICS
 
 =head2 min
 
@@ -438,6 +439,126 @@ sub percentile
                    $t[$i]*(int($i+1)-$i) + $t[$i+1]*($i-int($i));
   }
   return @p==1 ? $ret[0] : @ret;
+}
+
+=head2 resolve
+
+Resolves an equation by Newtons method.
+
+B<Input:> 1-6 arguments.
+
+First argument: must be a coderef to a subroutine (a function)
+
+Second argument: the target, f(x)=target. Default 0.
+
+Third argument: a start position for x. Default 0.
+
+Fourth argument: a small delta value. Default 1e-4 (0.0001).
+
+Fifth argument: a maximum number of iterations before resolve gives up
+and carps. Default 100 (if fifth argument is not given or is
+undef). The number 0 means infinite here.  If the derivative of the
+start position is zero or close to zero more iterations are typically
+needed.
+
+Sixth argument: A number of seconds to run before giving up.  If both
+fifth and sixth argument is given and > 0, C<resolve> stops at
+whichever comes first.
+
+B<Output:> returns the number C<x> for C<f(x)> = 0
+
+...or equal to the second input argument if present.
+
+B<Example:>
+
+The equation C<< x^2 - 4x - 21 = 0 >> has two solutions: -3 and 7.
+
+The result of C<resolve> will depend on the start position:
+
+ print resolve(sub{ my $x=shift; $x**2 - 4*$x - 21 });        # -3 with default start position 0
+ print resolve(sub{ my $x=shift; $x**2 - 4*$x - 21 },0,3);    # 7  with start position 3
+ print "Iterations: $Acme::Tools::Resolve_iterations\n";      # 3 or larger, about 10-15 is normal
+
+The variable C< $Acme::Tools::Resolve_iterations > (which is exported) will
+be set to the last number of iterations C<resolve> used. Work also if
+C<resolve> dies (carps).
+
+The variable C< $Acme::Tools::Resolve_last_estimate > (which is exported) will
+be set to the last estimate. This number will often be close to the solution
+and can be used even if C<resolve> dies (carps).
+
+B<BigFloat-example:>
+
+If either second, third or fourth argument is an instance of Math::BigFloat, so will the result be:
+
+ use Acme::Tools;
+ use Math::BigFloat try => 'GMP';  # pure perl, no warnings if GMP not installed
+ my $start=Math::BigFloat->new(1);
+ my $gr1 = resolve(sub{my$x=shift; $x-1-1/$x;},0,1);     # 1/2 + sqrt(5)/2
+ my $gr2 = resolve(sub{my$x=shift; $x-1-1/$x;},0,$start);# 1/2 + sqrt(5)/2
+ Math::BigFloat->div_scale(50); #default is 40
+ my $gr3 = resolve(sub{my$x=shift; $x-1-1/$x;},0,$start);# 1/2 + sqrt(5)/2
+ print "Golden ratio 1: $gr1\n";
+ print "Golden ratio 2: $gr2\n";
+ print "Golden ratio 3: $gr3\n";
+
+Output:
+
+ Golden ratio 1: 1.61803398874989
+ Golden ratio 2: 1.61803398874989484820458683436563811772029300310882395927211731893236137472439025
+ Golden ratio 3: 1.6180339887498948482045868343656381177203091798057610016490334024184302360920167724737807104860909804
+
+See:
+
+L<http://en.wikipedia.org/wiki/Newtons_method>
+
+L<Math::BigFloat>
+
+L<http://en.wikipedia.org/wiki/Golden_ratio>
+
+=cut
+
+our $Resolve_iterations;
+our $Resolve_last_estimate;
+
+sub resolve
+{
+  my($f,$g,$start,$delta,$iters,$sec)=@_;
+  
+  $g=0        if not defined $g;
+  $start=0    if not defined $start;
+  $delta=1e-4 if not defined $delta;
+  $iters=100  if not defined $iters;
+  $sec=0      if not defined $sec;
+  $iters=13e13 if $iters==0;
+  croak "Iterations ($iters) or seconds ($sec) can not be a negative number" if $iters<0 or $sec<0;
+  $Resolve_iterations=undef;
+  $Resolve_last_estimate=undef;
+  croak "Should have at least 1 argument, a coderef" if not @_;
+  croak "First argument should be a coderef" if not ref($f) eq 'CODE';
+  
+  my @x=($start);
+  my $time_start=$sec>0?time_fp():undef;
+  my $timeout=0;
+  my $ds=ref($start) eq 'Math::BigFloat' ? Math::BigFloat->div_scale() : undef;
+  
+  for my $n (0..$iters-1){
+    my $fd= &$f($x[$n]+$delta*0.5) - &$f($x[$n]-$delta*0.5);
+    $fd   = &$f($x[$n]+$delta*0.6) - &$f($x[$n]-$delta*0.4) if $fd==0; #wiggle...
+    $fd   = &$f($x[$n]+$delta*0.3) - &$f($x[$n]-$delta*0.7) if $fd==0;
+    #warn "n=$n  fd=$fd\n";
+    croak "Div by zero: df(x) = $x[$n] at n'th iteration, n=$n" if $fd==0;
+    $Resolve_last_estimate=
+    $x[$n+1]=$x[$n]-(&$f($x[$n])-$g)/($fd/$delta);
+    $Resolve_iterations=$n;
+    last if $n>3 and $x[$n+1]==$x[$n] and $x[$n]==$x[$n-1];
+    last if $n>3 and ref($x[$n+1]) eq 'Math::BigFloat' and substr($x[$n+1],0,$ds) eq substr($x[$n],0,$ds); #hm
+    croak "Could not resolve, perhaps too little time given ($sec), iteratons=$n"
+      if $sec>0 and time_fp()-$time_start>$sec and $timeout=1;
+    #warn "$n: ".$x[$n+1]."\n";
+  }
+  croak "Could not resolve, perhaps too few iterations ($iters)" if @x>=$iters;
+  return $x[-1];
 }
 
 #=head1 SQL INSPIRED FUNCTIONS
@@ -933,7 +1054,7 @@ B<Output:> One or more pseudo-random numbers with a Gaussian distribution. Also 
 
 Example:
 
- my @I=random_gauss(100, 15, 100000);         # 100000 pseudo-randomg numbers, average=100, stddev=15
+ my @I=random_gauss(100, 15, 100000);         # produces 100000 pseudo-random numbers, average=100, stddev=15
  #my @I=map random_gauss(100, 15), 1..100000; # same but more than three times slower
  print "Average is:    ".avg(@I)."\n";        # prints a number close to 100
  print "Stddev  is:    ".stddev(@I)."\n";     # prints a number close to 15
@@ -1357,7 +1478,7 @@ sub ipaddr
   #er konstanten AF_INET i Socket eller IO::Socket-pakken.
 
   my $ipaddr=gethostbyaddr(pack("C4",split("\\.",$ipnr)),2);
-  $IPADDR_memo{$ipnr} = length($ipaddr)==0?undef:$ipaddr;
+  $IPADDR_memo{$ipnr} = $ipaddr;
   return $IPADDR_memo{$ipnr};
 }
 
@@ -2094,7 +2215,7 @@ Six friends will be eating at a table with six chairs.
 How many ways (permutations) can those six be placed when the number of chairs equal the number of people?
 
  If one person:          one
- If tho persons:         two     (they can swap places with each other)
+ If two persons:         two     (they can swap places)
  If three persons:       six
  If four persons:         24
  If five persons:        120
@@ -3469,7 +3590,7 @@ sub serialize
 
 Input: A year, four digits
 
-Output: two numbers: month and date of Easter Sunday that year. Month 3 means March and 4 means April.
+Output: array of two numbers: month and date of Easter Sunday that year. Month 3 means March and 4 means April.
 
  sub easter { use integer;my$Y=shift;my$C=$Y/100;my$L=($C-$C/4-($C-($C-17)/25)/3+$Y%19*19+15)%30;
              (($L-=$L>28||($L>27?1-(21-$Y%19)/11:0))-=($Y+$Y/4+$L+2-$C+$C/4)%7)<4?($L+28,3):($L-3,4) }
@@ -3477,9 +3598,10 @@ Output: two numbers: month and date of Easter Sunday that year. Month 3 means Ma
 ...is a "golfed" version of Oudins algorithm (1940) L<http://astro.nmsu.edu/~lhuber/leaphist.html>
 (see also http://www.smart.net/~mmontes/ec-cal.html )
 
-Valid for any Gregorian year. Dates repeat themselves after
-70499183 lunations = 2081882250 days = ca 5699845 year ...but within that time frame
-earth will have different rotation time around the sun and spin time around itself.
+Valid for any Gregorian year. Dates repeat themselves after 70499183
+lunations = 2081882250 days = ca 5699845 year ...but the earth will
+before that have a different rotation time around the sun and spin
+time around itself...
 
 =cut
 
@@ -3537,15 +3659,25 @@ Input: a number
 
 Output:
 
-the number with a B behind if the number is less than 1024 (2**10)
+the number with a B behind if the number is less than 1000
 
-the number divided by 1024 with two decimals and "kB" behind if the number is less than 1048576 (2**20 ~ 1000)
+the number divided by 1024 with two decimals and "kB" behind if the number is less than 1024*1000
 
-the number divided by 1048576 with two decimals and "MB" behind if the number is less than 1073741824 (2**30 ~ 1 million)
+the number divided by 1048576 with two decimals and "MB" behind if the number is less than 1024*1024*1000
 
-the number divided by 1073741824 with two decimals and "GB" behind if the number is less than 1099511627776 (2**40 ~ 1 billion)
+the number divided by 1073741824 with two decimals and "GB" behind if the number is less than 1024*1024*1024*1000
 
 the number divided by 1099511627776 with two decimals and "TB" behind otherwise
+
+Examples:
+
+ print bytes_readable(999);                              # 999 B
+ print bytes_readable(1000);                             # 0.98 kB
+ print bytes_readable(1024);                             # 1.00 kB
+ print bytes_readable(1153433.6);                        # 1.10 MB
+ print bytes_readable(1181116006.4);                     # 1.10 GB
+ print bytes_readable(1209462790553.6);                  # 1.10 TB
+ print bytes_readable(1088516511498.24*1000);            # 990.00 TB
 
 =cut
 
@@ -3585,7 +3717,9 @@ sub bytes_readable
 #   $v & (2**$b-1)
 # }
 
-=head1 Bloom filter subroutines
+=head2
+
+=head1 BLOOM FILTER SUBROUTINES
 
 Bloom filters can be used to check whether an element (a string) is a
 member of a large set using much less memory or disk space than other
@@ -3679,8 +3813,8 @@ for small filters with a small capacity (a small number of keys), but
 setting the number to 4 ensures that even very large filters with very
 small error rates would not overflow.
 
-Since Acme::Tools does not currently support C<<counting_bits => 3>>,
-4 or 8 is the only practical alternatives. 
+Acme::Tools does not currently support C<< counting_bits => 3 >> so 4
+or 8 is the only practical alternatives.
 
  my $bf=bfinit(
    error_rate=>0.001,
@@ -3731,11 +3865,14 @@ not check for that).
 
 Counting bloom filters are not very space efficient: The tables above shows that 84%-85% of the counters are 0 or 1. Most bits are zero-bits.
 
+Deletion of non-existing keys C<bfdelete> croaks on deletion of a non-existing key
+
 =head2 bfdelete
 
 Deletes from a counting bloom filter:
 
  bfdelete($bf, @keys);
+ bfdelete($bf, \@keys);
 
 Returns C<$bf> after deletion.
 
@@ -3756,7 +3893,7 @@ hash functions, adds the filters:
 
 Prints yes since C<bfgrep> now returns an array of all the 1000 elements.
 
-Croaks if the filters are of different dimentions.
+Croaks if the filters are of different dimensions.
 
 Works for counting bloom filters as well (C<counting_bits=>4> e.g.)
 
@@ -3768,6 +3905,51 @@ Returns the number of 1's in the filter.
  printf "The filter is %.1f%% filled\n",$percent; #prints 50.0% or so if filled to capacity
 
 Sums the counters for counting bloom filters (much slower than for non counting).
+
+=head2 bfdimensions
+
+Input, two numeric arguments: Capacity and error_rate.
+
+Outputs an array of two numbers: m and k.
+
+  m = - n * log(p) / log(2)**2   # n = capacity, m = bits in filter (divide by 8 to get bytes)
+  k = log(1/p) / log(2)          # p = error_rate, uses perls internal log() with base e (2.718)
+
+...that is: m = the best number of bits in the filter and k = the best
+number of hash functions optimized for the given capacity (n) and
+error_rate (p). Note that k is a dependent only of the error_rate.  At
+about two percent error rate the bloom filter needs just the same
+number of bytes as the number of keys.
+
+ Storage (bytes):
+ Capacity      Error-rate  Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate Error-rate
+               0.000000001 0.00000001 0.0000001  0.000001   0.00001    0.0001     0.001      0.01       0.02141585 0.1        0.5        0.99
+ ------------- ----------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- ---------- 
+            10 54.48       48.49      42.5       36.51      30.52      24.53      18.53      12.54      10.56      6.553      2.366      0.5886
+           100 539.7       479.8      419.9      360        300.1      240.2      180.3      120.4      100.6      60.47      18.6       0.824
+          1000 5392        4793       4194       3595       2996       2397       1798       1199       1001       599.6      180.9      3.177
+         10000 5.392e+04   4.793e+04  4.194e+04  3.594e+04  2.995e+04  2.396e+04  1.797e+04  1.198e+04  1e+04      5991       1804       26.71
+        100000 5.392e+05   4.793e+05  4.193e+05  3.594e+05  2.995e+05  2.396e+05  1.797e+05  1.198e+05  1e+05      5.991e+04  1.803e+04  262
+       1000000 5.392e+06   4.793e+06  4.193e+06  3.594e+06  2.995e+06  2.396e+06  1.797e+06  1.198e+06  1e+06      5.991e+05  1.803e+05  2615
+      10000000 5.392e+07   4.793e+07  4.193e+07  3.594e+07  2.995e+07  2.396e+07  1.797e+07  1.198e+07  1e+07      5.991e+06  1.803e+06  2.615e+04
+     100000000 5.392e+08   4.793e+08  4.193e+08  3.594e+08  2.995e+08  2.396e+08  1.797e+08  1.198e+08  1e+08      5.991e+07  1.803e+07  2.615e+05
+    1000000000 5.392e+09   4.793e+09  4.193e+09  3.594e+09  2.995e+09  2.396e+09  1.797e+09  1.198e+09  1e+09      5.991e+08  1.803e+08  2.615e+06
+   10000000000 5.392e+10   4.793e+10  4.193e+10  3.594e+10  2.995e+10  2.396e+10  1.797e+10  1.198e+10  1e+10      5.991e+09  1.803e+09  2.615e+07
+  100000000000 5.392e+11   4.793e+11  4.193e+11  3.594e+11  2.995e+11  2.396e+11  1.797e+11  1.198e+11  1e+11      5.991e+10  1.803e+10  2.615e+08
+ 1000000000000 5.392e+12   4.793e+12  4.193e+12  3.594e+12  2.995e+12  2.396e+12  1.797e+12  1.198e+12  1e+12      5.991e+11  1.803e+11  2.615e+09
+
+Error rate:               0.99   Hash functions:  1
+Error rate:                0.5   Hash functions:  1
+Error rate:                0.1   Hash functions:  3
+Error rate: 0.0214158522653385   Hash functions:  6
+Error rate:               0.01   Hash functions:  7
+Error rate:              0.001   Hash functions: 10
+Error rate:             0.0001   Hash functions: 13
+Error rate:            0.00001   Hash functions: 17
+Error rate:           0.000001   Hash functions: 20
+Error rate:          0.0000001   Hash functions: 23
+Error rate:         0.00000001   Hash functions: 27
+Error rate:        0.000000001   Hash functions: 30
 
 =head2 bfstore
 
@@ -3798,16 +3980,18 @@ Is the same as:
 
 =head2 bfclone
 
+Deep copies the bloom filter data structure. (Which is not very deep)
+
 This:
 
  my $bfc = bfclone($bf);
 
-Is the same as:
+Works just as:
 
  use Storable;
  my $bfc=Storable::dclone($bf);
 
-=head2 Object oriented interface
+=head2 Object oriented interface to bloom filters
 
  my $bf=new Acme::Tools::BloomFilter(0.1,1000); #see bfinit above, the same as new
  print ref($bf),"\n";                        # prints Acme::Tools:BloomFilter
@@ -3820,16 +4004,34 @@ Is the same as:
 
  $bf2=$bf->clone();
 
-To instantiate a previously stored b.f.:
+To instantiate a previously stored bloom filter:
 
  my $bf = Acme::Tools::BloomFilter->new( '/path/to/stored/bloomfilter.bf' );
 
-The o.o. interface has the same methods as the C<bf...>-subs, without the
+The o.o. interface has the same methods as the C<bf...>-subs without the
 C<bf>-prefix in the names. The C<bfretrieve> is not available as a
 method, although C<bfretrieve>, C<Acme::Tools::bfretrieve> and
-C<Acme::Tools::BloomFilter::bfretrieve> are synonyms.
+C<Acme::Tools::BloomFilter::retrieve> are synonyms.
 
-=head2 Theory and math behind
+=head2 Internals and speed
+
+The internal hash-functions are C<< md5( "$key$salt" ) >> from L<Digest::MD5>.
+
+Since C<md5> returns 128 bits and most medium to large sized bloom
+filters need only a 32 bit hash function, the result from md5() are
+split (C<unpack>-ed) into 4 parts 32 bits each and are treated as if 4
+hash functions was called. Using different salts to the key on each
+md5 results in different hash functions.
+
+Digest::SHA512 would have been better, but its slower than Digest::MD5.
+
+String::CRC32::crc32 is faster than Digest::MD5, but not 4 times faster:
+
+ time perl -e'use Digest::MD5 qw(md5);md5("asdf$_") for 1..10e6'       #5.56 sec
+ time perl -e'use String::CRC32;crc32("asdf$_") for 1..10e6'           #2.79 sec, faster but not per bit
+ time perl -e'use Digest::SHA qw(sha512);sha512("asdf$_") for 1..10e6' #36.10 sec, too slow (sha1, sha224, sha256 and sha384 too)
+
+=head2 Theory and math behind bloom filters
 
 L<http://www.internetmathematics.org/volumes/1/4/Broder.pdf>
 
@@ -3838,6 +4040,8 @@ L<http://blogs.sun.com/jrose/entry/bloom_filters_in_a_nutshell>
 L<http://pages.cs.wisc.edu/~cao/papers/summary-cache/node8.html>
 
 See also Scaleable Bloom Filters: L<http://gsd.di.uminho.pt/members/cbm/ps/dbloom.pdf> (not implemented here)
+
+...and perhaps L<http://intertrack.naist.jp/Matsumoto_IEICE-ED200805.pdf>
 
 =cut
 
@@ -3868,9 +4072,11 @@ sub bfinit
 	 };
   croak "Error rate ($$bf{error_rate}) should be larger than 0 and smaller than 1" if $$bf{error_rate}<=0 or $$bf{error_rate}>=1;
   @$bf{'min_hashfuncs','max_hashfuncs'}=(map$arg{hashfuncs},1..2) if $arg{hashfuncs};
-  @$bf{'filterlength','hashfuncs'}=bfdimentions($bf); #m and k
-  $$bf{unpack}=$$bf{filterlength}<=2**16?"n*":$$bf{filterlength}<=2**32?"N*":"Q*";
+  @$bf{'filterlength','hashfuncs'}=bfdimensions($bf); #m and k
   $$bf{filter}=pack("b*", '0' x ($$bf{filterlength}*$$bf{counting_bits}) ); #hm x   new empty filter
+  $$bf{unpack}= $$bf{filterlength}<=2**16/4 ? "n*" # /4 alleviates skewing if m just slightly < 2**x
+               :$$bf{filterlength}<=2**32/4 ? "N*"
+               :                              "Q*";
   bfadd($bf,@{$arg{keys}}) if $arg{keys};
   return $bf;
 }
@@ -4026,13 +4232,20 @@ sub bfdelete
   for my $key (@$keysref){
     my @h; push @h, unpack $up, Digest::MD5::md5($key,0+@h) while @h<$k;
     $$bf{key_count}==0 and croak "Deleted all and then some"  or  $$bf{key_count}--;
-    my $ones=0;
+    my($ones,$croak,@pos)=(0);
     for(0..$k-1){
       my $pos=$h[$_] % $m;
-      my $c=vec($$bf{filter}, $pos, $cb);
-      croak "Cannot delete a non-existing key $key" if $c==0;
+      my $c=
+      vec($$bf{filter}, $pos, $cb);
       vec($$bf{filter}, $pos, $cb)=$c-1;
-      croak "Cannot delete a previously overflown position" if $c==1 and ++$ones and $$bf{overflow}{$pos};
+      $croak="Cannot delete a non-existing key $key" if $c==0;
+      $croak="Cannot delete with previously overflown position. Double counting_bits"
+	if $c==1 and ++$ones and $$bf{overflow}{$pos};
+    }
+    if($croak){ #rollback
+      vec($$bf{filter}, $h[$_] % $m, $cb)=
+      vec($$bf{filter}, $h[$_] % $m, $cb)+1 for 0..$k-1;
+      croak $croak;
     }
   }
   return $bf;
@@ -4046,24 +4259,34 @@ sub bfretrieve
 {
   require Storable;
   my $bf=Storable::retrieve(@_);
-  carp "Retrieved bloom filter was stored in version $$bf{version}, this is version $VERSION" if $$bf{version}>$VERSION;
+  carp  "Retrieved bloom filter was stored in version $$bf{version}, this is version $VERSION" if $$bf{version}>$VERSION;
   return $bf;
 }
 sub bfclone
 {
   require Storable;
-  return Storable::dclone(@_);
+  return Storable::dclone(@_); #could be faster
 }
-
-sub bfdimentions
+sub bfdimensions_old
 {
   my($n,$p,$mink,$maxk, $k,$flen,$m)=
     @_==1 ? (@{$_[0]}{'capacity','error_rate','min_hashfuncs','max_hashfuncs'},1)
    :@_==2 ? (@_,1,100,1)
           : croak "Wrong number of arguments (".@_."), should be 2";
+  croak "p ($p) should be > 0 and < 1" if not $p>0 && $p<1;
   $m=-1*$_*$n/log(1-$p**(1/$_)) and (!defined $flen or $m<$flen) and ($flen,$k)=($m,$_) for $mink..$maxk;
   $flen = int(1+$flen);
   return ($flen,$k);
+}
+sub bfdimensions
+{
+  my($n,$p,$mink,$maxk)=
+    @_==1 ? (@{$_[0]}{'capacity','error_rate','min_hashfuncs','max_hashfuncs'})
+   :@_==2 ? (@_,1,100)
+          : croak "Wrong number of arguments (".@_."), should be 2";
+  my $k=log(1/$p)/log(2);           # k hash funcs
+  my $m=-$n*log($p)/log(2)**2;      # m bits in filter
+  return ($m+0.5,min($maxk,max($mink,int($k+0.5))));
 }
 
 1;
@@ -4090,12 +4313,31 @@ sub retrieve {&Acme::Tools::bfretrieve}
 sub clone    {&Acme::Tools::bfclone}
 sub sum      {&Acme::Tools::bfsum}
 1;
+
+# Ny versjon:
+# + endre $VERSION
+# + endre Release history under HISTORY
+# + endre årstall under COPYRIGHT AND LICENSE
+# + emacs Changes
+# + emacs README
+# + perl            Makefile.PL;make test
+# + /local/bin/perl Makefile.PL;make test
+# + /usr/bin/perl   Makefile.PL;make test
+# + test evt i cygwin og mingw-perl
+# + make dist
+# + cp -p *tar.gz /htdocs/
+# + ci -l -mversjon -d `cat MANIFEST`
+# + http://pause.perl.org/
+# http://en.wikipedia.org/wiki/Birthday_problem#Approximations
+
+
 __END__
 
 =head1 HISTORY
 
 Release history
 
+ 0.13   Oct 2010   Non-linux test issue, resolve. improved: bloom filter, tests, doc
  0.12   Oct 2010   Improved tests, doc, bloom filter, random_gauss, bytes_readable
  0.11   Dec 2008   Improved doc
  0.10   Dec 2008
