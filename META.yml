@@ -1,25 +1,25 @@
---- #YAML:1.0
-name:               Acme-Tools
-version:            0.13
-abstract:           Lots of more or less useful subs lumped together and exported into your namespace
+---
+abstract: 'Lots of more or less useful subs lumped together and exported into your namespace'
 author:
-    - Kjetil Skotheim <kjetilskotheim@gmail.com>
-license:            unknown
-distribution_type:  module
-configure_requires:
-    ExtUtils::MakeMaker:  0
+  - 'Kjetil Skotheim <kjetilskotheim@gmail.com>'
 build_requires:
-    ExtUtils::MakeMaker:  0
-requires:
-    Carp:            0.01
-    Compress::Zlib:  0.01
-    MIME::Base64:    0.01
-    Time::HiRes:     0.01
-no_index:
-    directory:
-        - t
-        - inc
-generated_by:       ExtUtils::MakeMaker version 6.56
+  ExtUtils::MakeMaker: 0
+configure_requires:
+  ExtUtils::MakeMaker: 0
+dynamic_config: 1
+generated_by: 'ExtUtils::MakeMaker version 6.8, CPAN::Meta::Converter version 2.120351'
+license: unknown
 meta-spec:
-    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
-    version:  1.4
+  url: http://module-build.sourceforge.net/META-spec-v1.4.html
+  version: 1.4
+name: Acme-Tools
+no_index:
+  directory:
+    - t
+    - inc
+requires:
+  Carp: 0.01
+  Compress::Zlib: 0.01
+  MIME::Base64: 0.01
+  Time::HiRes: 0.01
+version: 0.14
