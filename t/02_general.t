@@ -1,13 +1,9 @@
 # make test
-# or
 # perl Makefile.PL; make; perl -Iblib/lib t/02_general.t
 
-use strict;
-use warnings;
-use Test::More tests => 178;
+BEGIN{require 't/common.pl'}
+use Test::More tests => 152;
 use Digest::MD5 qw(md5_hex);
-BEGIN { use_ok('Acme::Tools') };
-sub ok_ref { ok( serialize($_[0]) eq serialize($_[1]), $_[2] ) }
 
 my @empty;
 #-- min, max
@@ -139,13 +135,6 @@ ok( join(" ", intersect( ["five", 1, 2, 3.0, 4], [4, 2+1, "five"] )) eq '4 3 fiv
 #--not_intersect
 ok( join( " ", not_intersect( ["five", 1, 2, 3.0, 4], [4, 2+1, "five"] )) eq '1 2' );
 
-#--zip
-ok( join( " ", zip( [1,3,5]          ) ) eq '1 3 5',       'zip 1' );
-ok( join( " ", zip( [1,3,5], [2,4,6] ) ) eq '1 2 3 4 5 6', 'zip 2' );
-ok( join( " ", zip( [1,4,7], [2,5,8], [3,6,9] ) ) eq '1 2 3 4 5 6 7 8 9', 'zip 3' );
-ok( do{eval{zip([1,2],[3,4],5)};$@=~/ERROR.*zip/}, 'zip err 1');
-ok( do{eval{zip([1,2],[3,4,5])};$@=~/ERROR.*zip/}, 'zip err 2');
-
 #--subhash
 my %pop = ( Norway=>4800000, Sweeden=>8900000, Finland=>5000000,
             Denmark=>5100000, Iceland=>260000, India => 1e9 );
@@ -160,38 +149,6 @@ ok_ref( {hashtrans(\%h)},
         {a=>{1=>33,2=>11,3=>88},
          b=>{1=>55,2=>22,3=>99}}, 'hashtrans' );
 
-#--zipb64, zipbin, unzipb64, unzipbin, gzip, gunzip
-my $s=join"",map random([qw/hip hop and you dont stop/]), 1..1000;
-ok( length(zipb64($s)) / length($s) < 0.5 );
-ok( between(length(zipbin($s)) / length(zipb64($s)), 0.7, 0.8));
-ok( between(length(zipbin($s)) / length(zipb64($s)), 0.7, 0.8));
-ok( length(zipbin($s)) / length($s) < 0.4 );
-ok( $s eq unzipb64(zipb64($s)));
-ok( $s eq unzipbin(zipbin($s)));
-my $d=substr($s,1,1000);
-ok( length(zipb64($s,$d)) / length(zipb64($s)) < 0.8 );
-my $f;
-ok( ($f=length(zipb64($s,$d)) / length(zipb64($s))) < 0.73 , "0.73 > $f");
-#for(1..10){
-#  my $s=join"",map random([qw/hip hop and you dont stop/]), 1..1000;
-#  my $d=substr($s,1,1000);
-#  my $f= length(zipbin($s,$d)) / length(zipbin($s));
-#  print $f,"\n";
-#}
-
-#--gzip, gunzip
-$s=join"",map random([qw/hip hop and you do not everever stop/]), 1..10000;
-ok(length(gzip($s))/length($s) < 1/5);
-ok($s eq gunzip(gzip($s)));
-ok($s eq unzipbin(gunzip(gzip(zipbin($s)))));
-ok($s eq unzipb64(unzipbin(gunzip(gzip(zipbin(zipb64($s)))))));
-
-print length($s),"\n";
-print length(gzip($s)),"\n";
-print length(zipbin($s)),"\n";
-print length(zipbin($s,$d)),"\n";
-
-
 #--ipaddr, ipnum
 my $ipnum=ipnum('www.uio.no'); # !defined implies no network
 my $ipaddr=defined$ipnum?ipaddr($ipnum):undef;
@@ -204,17 +161,11 @@ if(defined $ipaddr){
 else{ ok(1,'skip: no network') for 1..3 }
 
 #--webparams, urlenc, urldec
+my $s=join"",map random([qw/hip hop and you dont stop/]), 1..1000;
 my %in=("\n&pi=3.14+0\n\n"=>gzip($s x 5),123=>123321);
 my %out=webparams(join("&",map{urlenc($_)."=".urlenc($in{$_})}sort keys%in));
 ok_ref( \%in, \%out, 'webparams 1' );
 ok_ref( $a={webparams("b=123&a=1&b=122&a=3&a=2%20")},{a=>'1,3,2 ',b=>'123,122'}, 'webparams 2' );
-
-#--ht2t
-ok_ref( [ht2t(" not this <table> <tr><td>asdf</td><td>asdf</td><td>asdf</td></tr> <tr><td>asdf</td><td>asdf</td><td>asdf</td></tr></table>
-                but this <table> <tr><td>&#160;12&#160;34</td><td>as\ndf</td><td>1234</td></tr> <tr><td>asdf</td><td>1234</td><td>as<b>df</b></td></tr></table>
-              ","but")],
-	[[1234,"as\ndf",1234],
-	 ['asdf',1234,'as df']], 'ht2t' );
 
 #--chall
 if($^O eq 'linux'){
@@ -297,10 +248,6 @@ ok( $ss eq "*1,10,100*1,10,400*1,20,300*1,30,200*2,10,300*2,20,200*2,30,100*2,30
 my @ch=                                         cart(a=>[1..3],b=>[1..2],c=>[1..4]);
 my @ca=map{my($a,$b,$c)=@$_;{a=>$a,b=>$b,c=>$c}}cart(   [1..3],   [1..2],   [1..4]);
 ok_ref(\@ch,\@ca, 'cart - hash mode');
-
-#--int2roman
-my %rom=(MCCXXXIV=>1234,MCMLXXI=>1971,IV=>4,VI=>6,I=>1,V=>5,X=>10,L=>50,C=>100,D=>500,M=>1000,CDXCVII=>497);
-my$rom;ok( ($rom=int2roman($rom{$_})) eq $_, sprintf"int2roman %8d => %-10s   %-10s",$rom{$_},$_,"($rom)") for sort keys%rom;
 
 #--num2code, code2num
 
@@ -419,9 +366,20 @@ es     fdsa
     22 adf
 END
 
-#-- upper, lower
+#-- upper, lower (utf8?)
 ok(upper('a-zæøåäëïöüÿâêîôûãõàèìòùáéíóúıñ' x 3) eq 'A-ZÆØÅÄËÏÖÜÿÂÊÎÔÛÃÕÀÈÌÒÙÁÉÍÓÚİÑ' x 3, 'upper'); #hmm ÿ
 ok(lower('A-ZÆØÅÄËÏÖÜ.ÂÊÎÔÛÃÕÀÈÌÒÙÁÉÍÓÚİÑ' x 3) eq 'a-zæøåäëïöü.âêîôûãõàèìòùáéíóúıñ' x 3, 'lower'); #hmm .
+
+#--trim
+ok( trim(" asdf \t\n    123 ") eq "asdf 123",  'trim 1');
+ok( trim(" asdf\t\n    123 ") eq "asdf\t123",  'trim 2');
+ok( trim(" asdf\n\t    123\n") eq "asdf\n123", 'trim 3');
+my($trimstr,@trim)=(' please ', ' please ', ' remove ', ' my ', ' spaces ');
+ok( join('',map"<$_>",trim(@trim)) eq '<please><remove><my><spaces>', 'trim array');
+trim(\$trimstr);
+ok($trimstr eq 'please', 'trim inplace');
+trim(\@trim);
+ok_ref(\@trim,[qw/please remove my spaces/], 'trim inplace array');
 
 #-- easter
 ok( '384f0eefc22c35d412ff01b2088e9e05' eq  md5_hex( join",", map{easter($_)} 1..5000), 'easter');
@@ -454,5 +412,3 @@ my$br;
 ok(($br=bytes_readable($_)) eq $br{$_}, "bytes_readable($_) == $br (should be $br{$_})")
   for sort {$a<=>$b} keys%br;
 
-#--ldist
-ok( ldist("kitten","sitting")==3, 'ldist' );
